@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepEcho-SAM — Forensic Audio Intelligence</title>
+  <meta name="description" content="DeepEcho-SAM v2.0 offline forensic engine. Detect AI-synthesized speech at 20ms temporal resolution using WavLM-Large.">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
+  <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app-shell">
+  <header class="app-topbar">
+    <div class="topbar-logo">
+      <div class="logo-mark">
+        <div class="logo-ring"></div>
+        <div class="logo-ring-inner"></div>
+        <div class="logo-dot"></div>
+      </div>
+      <div>
+        <div class="logo-wordmark">DEEPECHO-SAM</div>
+        <div class="logo-sub">Forensic Audio Intelligence</div>
+      </div>
+    </div>
+    <div class="topbar-sep"></div>
+    <div class="topbar-status">
+      <div class="status-dot"></div>
+      ENGINE ONLINE
+    </div>
+    <div class="topbar-right">
+      <button id="export-pdf-btn" class="export-report-btn" onclick="exportForensicReport()" disabled title="Export official Forensic Audit Certificate">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11.5 1.5H3.5a1 1 0 00-1 1v11a1 1 0 001 1h9a1 1 0 001-1v-8.5l-2-2.5z"/>
+          <path d="M10.5 1.5v3h3"/>
+          <line x1="5.5" y1="8.5" x2="10.5" y2="8.5"/>
+          <line x1="5.5" y1="11" x2="8.5" y2="11"/>
+        </svg>
+        <span>Export Forensic Report</span>
+      </button>
+      <div class="topbar-meta">PyTorch 2.14 / CUDA 12.2<br>WavLM-Large (25-layer)</div>
+    </div>
+  </header>
+  <nav class="app-sidebar">
+    <div class="nav-section-label">Navigation</div>
+    <ul class="nav-list">
+      <li class="nav-item">
+        <button onclick="navTo('page1')" id="nav-page1" class="nav-btn active" aria-current="page">
+          <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 8h2l1.5-4 2 8 2-6 1.5 4H15"/></svg>
+          <span class="nav-label">Live Inspector</span><span class="nav-num">01</span><div class="nav-active-pip"></div>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button onclick="navTo('page2')" id="nav-page2" class="nav-btn">
+          <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="1.5" y="1.5" width="13" height="13" rx="1"/><line x1="1.5" y1="5.5" x2="14.5" y2="5.5"/><line x1="1.5" y1="9.5" x2="14.5" y2="9.5"/><line x1="6" y1="5.5" x2="6" y2="14.5"/></svg>
+          <span class="nav-label">Benchmark Scorecard</span><span class="nav-num">02</span><div class="nav-active-pip"></div>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button onclick="navTo('page3')" id="nav-page3" class="nav-btn">
+          <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M9 1L3 9h5.5L7 15l7-8H8.5L9 1z"/></svg>
+          <span class="nav-label">Live Audit</span><span class="nav-num">03</span><div class="nav-active-pip"></div>
+        </button>
+      </li>
+    </ul>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-footer">
+      <div class="sidebar-footer-label">System</div>
+      <div class="sidebar-footer-row">
+        <svg class="sidebar-footer-icon" width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="12" height="10" rx="1"/><line x1="5" y1="13" x2="11" y2="13"/><line x1="8" y1="13" x2="8" y2="15"/></svg>
+        <span class="sidebar-footer-text">v2.0 Offline Engine</span>
+      </div>
+      <div class="sidebar-footer-row">
+        <svg class="sidebar-footer-icon" width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="8"/><line x1="8" y1="8" x2="11" y2="10"/></svg>
+        <span class="sidebar-footer-text">20.05ms temporal hop</span>
+      </div>
+      <div class="sidebar-footer-row">
+        <svg class="sidebar-footer-icon" width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="8"/><line x1="8" y1="8" x2="11" y2="10"/></svg>
+        <span class="sidebar-footer-text">35s max window &middot; 20ms hop</span>
+      </div>
+    </div>
+  </nav>
+  <main class="app-main">
+    <div id="loading-overlay" class="loading-overlay">
+      <div class="loading-rings">
+        <div class="ring ring-1"></div>
+        <div class="ring ring-2"></div>
+        <div class="ring ring-3"></div>
+      </div>
+      <div class="loading-label">Processing Audio</div>
+    </div>
+    <div id="page1" class="page-view active">
+      <div class="inspector-page">
+        <div class="ingestion-bar">
+          <div id="drop-zone" class="drop-zone" role="button" tabindex="0" aria-label="Upload audio file">
+            <input type="file" id="file-input" style="display:none" accept=".wav,.mp3,.m4a,.flac">
+            <svg class="drop-zone-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+            <div class="drop-zone-text">
+              <div class="drop-zone-primary" id="drop-zone-primary">Drag &amp; drop audio file or click to browse</div>
+              <div class="drop-zone-secondary">.wav .mp3 .m4a .flac &mdash; max 50 MB</div>
+            </div>
+          </div>
+          <!-- MIC RECORD BUTTON -->
+          <button id="mic-record-btn" class="mic-record-btn" onclick="toggleMicRecording()" aria-label="Record from microphone">
+            <svg class="mic-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="2" width="6" height="11" rx="3"/>
+              <path d="M5 10a7 7 0 0 0 14 0"/>
+              <line x1="12" y1="19" x2="12" y2="22"/>
+              <line x1="8" y1="22" x2="16" y2="22"/>
+            </svg>
+            <span class="mic-btn-label">Record&nbsp;Mic</span>
+          </button>
+          <!-- TAB / BROWSER AUDIO RECORD BUTTON -->
+          <button id="tab-record-btn" class="tab-record-btn" onclick="toggleTabRecording()" aria-label="Capture audio from browser tab">
+            <svg class="tab-btn-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="17" x2="12" y2="21"/>
+              <polygon points="8 8 11 6 11 14 8 12 6 12 6 8 8 8" fill="currentColor" stroke="none"/>
+              <path d="M14 8a3 3 0 0 1 0 4"/>
+            </svg>
+            <span class="tab-btn-label">Capture&nbsp;Tab</span>
+          </button>
+          <div class="threshold-group">
+            <span class="threshold-label">Sensitivity</span>
+            <select id="threshold-mode" class="threshold-select" aria-label="Sensitivity calibration threshold">
+              <option value="0.50">Standard Clean Audio &mdash; &tau; = 0.50</option>
+              <option value="0.87" selected>Compressed / Social Media &mdash; &tau; = 0.87</option>
+            </select>
+          </div>
+        </div>
+        <!-- RECORDING PANEL (hidden by default) -->
+        <div id="mic-panel" class="mic-panel" aria-hidden="true">
+          <div class="mic-panel-left">
+            <div class="mic-rec-dot" id="mic-rec-dot"></div>
+            <span class="mic-rec-label" id="mic-rec-label">MIC REC</span>
+            <span class="mic-rec-timer" id="mic-rec-timer">00:00</span>
+            <div class="mic-viz-wrap">
+              <canvas id="mic-viz-canvas" class="mic-viz-canvas" height="36"></canvas>
+            </div>
+          </div>
+          <div class="mic-panel-right">
+            <div class="mic-autocount-wrap">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="8"/><line x1="8" y1="8" x2="11" y2="10"/></svg>
+              <span class="mic-autocount-text" id="mic-autocount-text">Forensic Window: <strong>35s max</strong></span>
+              <div class="mic-progress-track"><div class="mic-progress-fill" id="mic-progress-fill"></div></div>
+            </div>
+            <button id="mic-stop-btn" class="mic-stop-btn" onclick="stopRecording()" aria-label="Stop recording and analyze">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="1"/></svg>
+              Stop &amp; Analyze
+            </button>
+          </div>
+        </div>
+        <!-- AUDIO TRIMMER BANNER (Displayed when audio > 35s or trimmer is opened) -->
+        <div id="trimmer-panel" class="trimmer-panel" style="display:none;" aria-hidden="true">
+          <div class="trimmer-panel-left">
+            <div class="trimmer-alert-badge">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="8"/><line x1="8" y1="11" x2="8.01" y2="11"/></svg>
+              <span>35s LIMIT REACHED</span>
+            </div>
+            <div class="trimmer-info-text">
+              Audio is <strong id="trimmer-orig-dur">0.0s</strong> (Forensic limit: <strong>35.0s max</strong>). Select clip region:
+            </div>
+            <div class="trimmer-time-chips">
+              <span class="trim-chip">Start: <strong id="trim-start-txt">00:00.0</strong></span>
+              <span class="trim-chip">End: <strong id="trim-end-txt">00:35.0</strong></span>
+              <span class="trim-chip active">Window: <strong id="trim-len-txt">35.0s</strong></span>
+            </div>
+          </div>
+          <div class="trimmer-panel-right">
+            <div class="trimmer-presets">
+              <button type="button" class="trim-preset-btn" onclick="applyTrimPreset('start')">First 35s</button>
+              <button type="button" class="trim-preset-btn" onclick="applyTrimPreset('middle')">Middle 35s</button>
+              <button type="button" class="trim-preset-btn" onclick="applyTrimPreset('end')">Last 35s</button>
+            </div>
+            <div class="trimmer-buttons">
+              <button id="trim-preview-btn" class="trim-btn-preview" onclick="toggleTrimPreview()" aria-label="Preview trimmed audio">
+                <svg id="trim-preview-play" width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path d="M4 3l10 5-10 5z"/></svg>
+                <svg id="trim-preview-pause" width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style="display:none"><path d="M4 3h3v10H4zm5 0h3v10H9z"/></svg>
+                <span id="trim-preview-label">Preview Trim</span>
+              </button>
+              <button id="trim-submit-btn" class="trim-btn-submit" onclick="submitTrimmedAudio()" aria-label="Analyze trimmed audio">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 8l3 3 7-7"/></svg>
+                <span>Analyze Trim (35s)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="waveform-section">
+          <div class="section-toolbar">
+            <button id="play-pause-btn" class="play-btn" disabled aria-label="Play / Pause audio">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor"><path id="play-icon" d="M4 3l10 5-10 5z"/></svg>
+            </button>
+            <div class="toolbar-sep"></div>
+            <span class="toolbar-label">Signal Readout</span>
+            <div class="toolbar-sep"></div>
+            <!-- Jump to Tamper Action Button -->
+            <button id="jump-tamper-btn" class="jump-tamper-btn" onclick="jumpToTamper()" style="display:none;" title="Jump to detected synthetic splice">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M7.5 3l6 5-6 5V3zm-7 0l6 5-6 5V3z"/>
+              </svg>
+              <span id="jump-tamper-label">Jump to Tamper (00:00)</span>
+              <span id="tamper-count-badge" class="tamper-count-badge">0</span>
+            </button>
+            <button id="toolbar-trim-toggle" class="toolbar-trim-btn" onclick="toggleManualTrim()" style="display:none;" title="Adjust audio trim">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="5" cy="5" r="2.5"/><circle cx="5" cy="11" r="2.5"/><line x1="7" y1="6" x2="14" y2="13"/><line x1="7" y1="10" x2="14" y2="3"/></svg>
+              <span>Trim Window</span>
+            </button>
+          </div>
+          <div class="waveform-wrap">
+            <div class="waveform-inner" id="waveform-container"></div>
+            <!-- Splice Tamper Regions Overlay -->
+            <div id="splice-regions-container" class="splice-regions-container" aria-label="Detected synthetic intervals"></div>
+            <!-- Interactive Trimmer Overlay over waveform -->
+            <div id="trimmer-overlay" class="trimmer-overlay" style="display:none;">
+              <div id="trim-shade-left" class="trim-shade left"></div>
+              <div id="trim-selection-window" class="trim-window">
+                <div id="trim-handle-start" class="trim-handle start" title="Drag to adjust start time">
+                  <div class="handle-bar"></div>
+                  <div class="handle-tag">START</div>
+                </div>
+                <div class="trim-window-center" id="trim-window-center" title="Drag to slide 35s window">
+                  <span id="trim-dur-badge" class="trim-dur-badge">00:00.0 &rarr; 00:35.0 (35.0s)</span>
+                </div>
+                <div id="trim-handle-end" class="trim-handle end" title="Drag to adjust end time">
+                  <div class="handle-bar"></div>
+                  <div class="handle-tag">END</div>
+                </div>
+              </div>
+              <div id="trim-shade-right" class="trim-shade right"></div>
+            </div>
+          </div>
+        </div>
+        <div class="timeline-section">
+          <div class="section-toolbar">
+            <span class="toolbar-label">Forensic Timeline</span>
+            <div class="toolbar-sep"></div>
+            <span style="font-family:var(--font-mono);font-size:10px;color:var(--chrome-hi);">20ms hop &middot; 399 frames &middot; P(synthetic) per frame</span>
+          </div>
+          <div class="timeline-canvas-wrap"><canvas id="timeline-chart"></canvas></div>
+        </div>
+        <div class="readout-bar">
+          <div class="verdict-cell" id="verdict-cell">
+            <div class="verdict-cell-label">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 2"/></svg>
+              Forensic Verdict
+            </div>
+            <div class="verdict-state-text" id="verdict-text">AWAITING AUDIO</div>
+            <div class="verdict-vu">
+              <div class="verdict-vu-label"><span>P(fake)</span><span id="verdict-vu-pct">0.0%</span></div>
+              <div class="verdict-vu-track"><div class="verdict-vu-fill" id="verdict-vu-fill"></div></div>
+            </div>
+            <div class="verdict-subtext" id="verdict-subtext"></div>
+            <button id="verdict-cert-btn" class="verdict-cert-btn" onclick="exportForensicReport()" disabled title="Download official Forensic Certificate">
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M11.5 1.5H3.5a1 1 0 00-1 1v11a1 1 0 001 1h9a1 1 0 001-1v-8.5l-2-2.5z"/><path d="M10.5 1.5v3h3"/><line x1="5.5" y1="8.5" x2="10.5" y2="8.5"/></svg>
+              <span>Export Audit Certificate</span>
+            </button>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-label">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="1 12 5 7 9 10 13 4 15 6"/></svg>
+              Fake Probability
+            </div>
+            <div class="metric-value idle" id="metric-prob">--.--%</div>
+            <div class="metric-bar-track"><div class="metric-bar-fill" id="prob-bar"></div></div>
+            <div class="metric-sub">of full file duration</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-label">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M8 1l1 5h5l-4 3 1.5 5L8 11l-4 3 1.5-5L1 6h5z"/></svg>
+              Confidence
+            </div>
+            <div class="metric-value idle" id="metric-conf">--.--%</div>
+            <div class="metric-bar-track"><div class="metric-bar-fill" id="conf-bar" style="background:var(--phosphor)"></div></div>
+            <div class="metric-sub">model decision margin</div>
+          </div>
+          <div class="metric-cell">
+            <div class="metric-label">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="8"/><line x1="8" y1="8" x2="11" y2="10"/></svg>
+              Evaluated Length
+            </div>
+            <div class="metric-value idle" id="metric-dur">---.-s</div>
+            <div class="metric-sub" id="metric-frames">-- active frames</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="page2" class="page-view">
+      <div class="scorecard-page">
+        <header class="page-header">
+          <div class="page-header-left">
+            <div class="page-eyebrow">
+              <div class="eyebrow-badge"><div class="eyebrow-badge-dot"></div>OFFICIAL BENCHMARK LOGS</div>
+              <span class="eyebrow-run-id">H200-SXM5-RUN-2024.11</span>
+            </div>
+            <h2 class="page-title">Benchmark Scorecard &amp; Research Metrics</h2>
+            <p class="page-desc">Empirical verification across 1,575,540 temporal frames and 43,843 audio sequences on NVIDIA H200 GPU cluster.</p>
+          </div>
+          <div class="page-header-chips">
+            <div class="header-chip"><div class="header-chip-dot"></div>NVIDIA H200 SXM5 141GB</div>
+            <div class="header-chip"><span class="header-chip-val">20.05ms</span>&nbsp;Temporal Hop</div>
+            <div class="header-chip">PyTorch 2.14 / CUDA 12.2</div>
+          </div>
+        </header>
+        <section class="lab-section">
+          <div class="lab-section-head">
+            <div class="lab-section-left">
+              <span class="lab-id-tag tag-t1">TABLE 1</span>
+              <h3 class="lab-section-title">Primary Benchmark &mdash; MLAAD + M-AILABS Held-Out Test Set</h3>
+            </div>
+            <span class="lab-frame-count">1,531,761 Evaluated Frames</span>
+          </div>
+          <p class="lab-caption"><strong>Header Caption:</strong> Primary Evaluation: 3,839 Unseen 8.0s Sequences (1,531,761 Discrete Temporal Frames @ 20.05ms resolution across 39 Generative Engines)</p>
+          <div class="lab-table-wrap">
+            <table class="lab-table">
+              <thead><tr>
+                <th>Acoustic Class</th><th class="ctr">Precision</th><th class="ctr">Recall</th><th class="ctr">F1-Score</th><th class="num">Support (Frames)</th>
+              </tr></thead>
+              <tbody>
+                <tr class="row-human">
+                  <td><svg width="8" height="8" viewBox="0 0 8 8" style="margin-right:6px;vertical-align:middle;"><circle cx="4" cy="4" r="3.5" fill="var(--data-teal)" opacity="0.8"/></svg>Human Speech Frame</td>
+                  <td class="ctr">99.57%</td><td class="ctr">96.69%</td><td class="ctr v-teal">0.9811</td><td class="num">772,672</td>
+                </tr>
+                <tr class="row-ai">
+                  <td><svg width="8" height="8" viewBox="0 0 8 8" style="margin-right:6px;vertical-align:middle;"><circle cx="4" cy="4" r="3.5" fill="var(--heat-red)" opacity="0.8"/></svg>AI Synthetic Frame</td>
+                  <td class="ctr">96.73%</td><td class="ctr v-pass">99.58%</td><td class="ctr">0.9813</td><td class="num">759,089</td>
+                </tr>
+                <tr class="row-overall">
+                  <td><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="var(--phosphor)" stroke-width="1.8" stroke-linecap="round" style="margin-right:6px;vertical-align:middle;"><path d="M3 8l3 3 7-7"/></svg><strong>Overall Metric (Macro)</strong></td>
+                  <td class="ctr v-pass">98.15%</td><td class="ctr v-pass">98.13%</td><td class="ctr v-pass">0.9812</td><td class="num v-strong">1,531,761 Frames</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="summary-chips">
+            <div class="summary-chip">
+              <div class="chip-top"><span class="chip-key">Decision Level: Majority Vote</span><div class="chip-status-dot" style="background:var(--phosphor);box-shadow:0 0 4px var(--phosphor)"></div></div>
+              <div class="chip-big v-pass">98.25%</div>
+              <div class="chip-sub">Macro F1: <span style="color:var(--text-body)">0.9825</span> &nbsp;&middot;&nbsp; 3,839 test pairs</div>
+            </div>
+            <div class="summary-chip">
+              <div class="chip-top"><span class="chip-key">Confusion Matrix &mdash; 1.53M Frames</span></div>
+              <div class="confusion-grid">
+                <div class="cfn-cell"><span class="cfn-cell-lbl">TN (Human Correct)</span><span class="cfn-cell-val" style="color:var(--text-body)">747,085</span></div>
+                <div class="cfn-cell"><span class="cfn-cell-lbl" style="color:var(--amber-sig)">FP (False Alarm)</span><span class="cfn-cell-val v-warn">25,587</span></div>
+                <div class="cfn-cell"><span class="cfn-cell-lbl" style="color:var(--heat-red)">FN (AI Missed)</span><span class="cfn-cell-val v-fail">3,220</span></div>
+                <div class="cfn-cell"><span class="cfn-cell-lbl" style="color:var(--phosphor)">TP (AI Caught)</span><span class="cfn-cell-val v-pass">755,869</span></div>
+              </div>
+            </div>
+            <div class="summary-chip">
+              <div class="chip-top"><span class="chip-key">Critical Error Profile</span><span style="font-family:var(--font-mono);font-size:9px;color:var(--data-teal)">Forensic Bounds</span></div>
+              <div class="prog-row">
+                <div class="prog-label-row"><span>Missed Detection Rate (FN/AI)</span><span class="v-pass">0.42%</span></div>
+                <div class="prog-track"><div class="prog-fill" style="width:0.42%;background:var(--phosphor)"></div></div>
+              </div>
+              <div class="prog-row" style="margin-top:10px">
+                <div class="prog-label-row"><span>False Alarm Rate (FP/Human)</span><span class="v-warn">3.31%</span></div>
+                <div class="prog-track"><div class="prog-fill" style="width:3.31%;background:var(--amber-sig)"></div></div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="lab-section">
+          <div class="lab-section-head">
+            <div class="lab-section-left">
+              <span class="lab-id-tag tag-t2">TABLE 2</span>
+              <h3 class="lab-section-title">CodecFake Zero-Shot Generalization Benchmark (12,000 Balanced Files)</h3>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <span class="legend-badge"><span class="legend-dot" style="background:var(--phosphor)"></span>A1: Zero-Shot ALM</span>
+              <span class="legend-badge"><span class="legend-dot" style="background:var(--data-teal)"></span>C7: Unseen DAC</span>
+            </div>
+          </div>
+          <p class="lab-caption"><strong>Header Caption:</strong> Cross-Dataset Evaluation across Audio Language Models (ALM) and Discrete RVQ Neural Audio Codecs</p>
+          <div class="lab-table-wrap">
+            <table class="lab-table">
+              <thead><tr>
+                <th class="ctr">Cond.</th><th>Architecture</th><th class="ctr">Evaluated</th>
+                <th class="ctr">EER (%)</th><th class="ctr">AUC-ROC (%)</th>
+                <th class="ctr">Calibrated Acc (%)</th><th class="ctr">Calibrated F1</th>
+                <th class="ctr">Opt Threshold (&tau;)</th><th class="ctr">Uncalibrated Acc (0.5)</th>
+              </tr></thead>
+              <tbody>
+                <tr class="row-hl-green">
+                  <td class="ctr"><span style="font-family:var(--font-mono);font-size:10px;padding:1px 5px;border:1px solid rgba(0,255,136,0.35);color:var(--phosphor);background:var(--phosphor-dim);border-radius:2px">A1</span></td>
+                  <td>Audio Language Model (VALL-E) <span class="inl-tag t-zero">Zero-Shot</span></td>
+                  <td class="ctr">2,000</td><td class="ctr v-pass">0.70%</td><td class="ctr v-pass">99.97%</td>
+                  <td class="ctr v-pass">99.30%</td><td class="ctr v-pass">0.9930</td><td class="ctr v-dim">0.4942</td><td class="ctr v-pass">99.20%</td>
+                </tr>
+                <tr>
+                  <td class="ctr v-strong">C2</td><td>SoundStream / SpeechTokenizer</td>
+                  <td class="ctr">2,000</td><td class="ctr">2.15%</td><td class="ctr">99.82%</td>
+                  <td class="ctr">97.85%</td><td class="ctr">0.9785</td><td class="ctr v-dim">0.0525</td><td class="ctr">94.60%</td>
+                </tr>
+                <tr>
+                  <td class="ctr v-strong">C3</td><td>FunCodec</td>
+                  <td class="ctr">2,000</td><td class="ctr">2.55%</td><td class="ctr">99.43%</td>
+                  <td class="ctr">97.45%</td><td class="ctr">0.9745</td><td class="ctr v-dim">0.0432</td><td class="ctr">94.95%</td>
+                </tr>
+                <tr>
+                  <td class="ctr v-strong">C5</td><td>AudioDec</td>
+                  <td class="ctr">2,000</td><td class="ctr v-pass">0.30%</td><td class="ctr v-pass">100.00%</td>
+                  <td class="ctr v-pass">99.70%</td><td class="ctr v-pass">0.9970</td><td class="ctr v-dim">0.3036</td><td class="ctr v-pass">99.65%</td>
+                </tr>
+                <tr>
+                  <td class="ctr v-strong">C6</td><td>AcademicCodec</td>
+                  <td class="ctr">2,000</td><td class="ctr v-warn">18.10%</td><td class="ctr">90.06%</td>
+                  <td class="ctr">81.90%</td><td class="ctr">0.8190</td><td class="ctr v-dim">0.0069</td><td class="ctr v-dim">61.95%</td>
+                </tr>
+                <tr class="row-hl-teal">
+                  <td class="ctr"><span style="font-family:var(--font-mono);font-size:10px;padding:1px 5px;border:1px solid rgba(0,200,212,0.35);color:var(--data-teal);background:var(--data-teal-dim);border-radius:2px">C7</span></td>
+                  <td><strong style="color:var(--data-teal)">Unseen Neural Codec (DAC)</strong> <span class="inl-tag t-held">Held-Out Zero-Shot</span></td>
+                  <td class="ctr">2,000</td><td class="ctr v-teal">25.25%</td><td class="ctr v-teal">84.20%</td>
+                  <td class="ctr v-teal">74.75%</td><td class="ctr v-teal">0.7475</td><td class="ctr v-dim">0.0054</td><td class="ctr v-dim">56.75%</td>
+                </tr>
+                <tr class="row-overall">
+                  <td class="ctr"><strong>OVERALL</strong></td><td><strong>Full Benchmark Summary</strong></td>
+                  <td class="ctr">12,000</td><td class="ctr v-pass">11.32%</td><td class="ctr v-pass">94.93%</td>
+                  <td class="ctr v-pass">88.68%</td><td class="ctr v-pass">0.8868</td><td class="ctr">0.0127</td><td class="ctr v-strong">84.52%</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="lab-section">
+          <div class="lab-section-head">
+            <div class="lab-section-left">
+              <span class="lab-id-tag tag-t3">TABLE 3</span>
+              <h3 class="lab-section-title">In-The-Wild (ITW) Benchmark Comparison (31,779 YouTube/TikTok Tracks)</h3>
+            </div>
+            <div class="sota-badge">
+              <div class="sota-dot"></div>
+              <span class="sota-label">State-of-the-Art:</span>
+              <span class="sota-val">ITW EER 18.90% &rarr; 8.02%</span>
+            </div>
+          </div>
+          <p class="lab-caption"><strong>Header Caption:</strong> Real-World Litmus Test: Unconstrained Social Media Audio across 58 Celebrities/Politicians</p>
+          <div class="lab-table-wrap">
+            <table class="lab-table">
+              <thead><tr>
+                <th>Model Architecture</th><th>Training Domain / Paradigm</th>
+                <th class="ctr">AUC-ROC (%)</th><th class="ctr">EER (%)</th>
+                <th class="ctr">Accuracy (%)</th><th class="ctr">Macro F1</th><th>Reference</th>
+              </tr></thead>
+              <tbody>
+                <tr>
+                  <td class="v-strong">RawNet2</td>
+                  <td class="v-dim" style="font-size:11px">ASVspoof 2019 (Vocoder baseline)</td>
+                  <td class="ctr">73.00%</td><td class="ctr v-fail">33.80%</td>
+                  <td class="ctr v-dim">&mdash;</td><td class="ctr v-dim">&mdash;</td>
+                  <td class="v-dim" style="font-size:11px">M&uuml;ller et al. (2022)</td>
+                </tr>
+                <tr>
+                  <td class="v-strong">RawGAT-ST</td>
+                  <td class="v-dim" style="font-size:11px">ASVspoof 2019 (Graph baseline)</td>
+                  <td class="ctr">71.00%</td><td class="ctr v-fail">33.70%</td>
+                  <td class="ctr v-dim">&mdash;</td><td class="ctr v-dim">&mdash;</td>
+                  <td class="v-dim" style="font-size:11px">Tak et al. (2021)</td>
+                </tr>
+                <tr>
+                  <td class="v-strong">AASIST</td>
+                  <td class="v-dim" style="font-size:11px">ASVspoof 2019 (Spectro-Temporal GAT)</td>
+                  <td class="ctr">81.00%</td><td class="ctr v-warn">18.90%</td>
+                  <td class="ctr v-dim">&mdash;</td><td class="ctr v-dim">&mdash;</td>
+                  <td class="v-dim" style="font-size:11px">Jung et al. (2022)</td>
+                </tr>
+                <tr>
+                  <td>DeepEcho v22 (Base)</td>
+                  <td class="v-dim" style="font-size:11px">MLAAD Only (Studio vocoders)</td>
+                  <td class="ctr">67.04%</td><td class="ctr v-fail">36.15%</td>
+                  <td class="ctr">63.46%</td><td class="ctr">0.6264</td>
+                  <td class="v-dim" style="font-size:11px">Our Baseline</td>
+                </tr>
+                <tr>
+                  <td style="color:var(--text-body)">DeepEcho-SAM (Adapted)</td>
+                  <td class="v-dim" style="font-size:11px">Seen Codecs + Vocoders</td>
+                  <td class="ctr" style="color:var(--text-body)">91.60%</td>
+                  <td class="ctr" style="color:var(--text-body)">14.35%</td>
+                  <td class="ctr" style="color:var(--text-body)">85.65%</td>
+                  <td class="ctr" style="color:var(--text-body)">0.8493</td>
+                  <td class="v-dim" style="font-size:11px">Intermediate Checkpoint</td>
+                </tr>
+                <tr class="row-champion">
+                  <td><span class="row-marker">&#9733;</span><strong>DeepEcho-SAM (Final)</strong></td>
+                  <td style="font-size:11px;font-weight:500">Causal Channel Invariance</td>
+                  <td class="ctr">95.76%</td>
+                  <td class="ctr" style="font-size:16px;font-weight:700">8.02%</td>
+                  <td class="ctr">91.98%</td><td class="ctr">0.9151</td>
+                  <td style="font-size:11px;font-weight:600">Our Final Champion (v2) <span class="inl-tag t-sota">SOTA</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="lab-section">
+          <div class="lab-section-head">
+            <div class="lab-section-left">
+              <span class="lab-id-tag tag-s4">SECTION 4</span>
+              <h3 class="lab-section-title">Forensic Research Visualizations</h3>
+            </div>
+            <span class="lab-frame-count">2 Figures Rendered</span>
+          </div>
+          <p class="lab-caption">Acoustic boundary analysis and multi-layer feature representation dynamics.</p>
+          <div class="viz-grid">
+            <div class="viz-panel">
+              <div class="viz-panel-bar">
+                <span class="viz-panel-tag">Splice Localization</span>
+                <span class="viz-panel-res">Resolution: 20ms</span>
+              </div>
+              <img src="/images/switch_detection_proof.png" alt="Splicing Detection Proof" class="viz-panel-img">
+              <div class="viz-panel-cap"><strong>Figure 1: 20ms Temporal Splice Localization</strong> &mdash; Constant-power trigonometric OLA splicing at <em>t</em> = 4.0s.</div>
+            </div>
+            <div class="viz-panel">
+              <div class="viz-panel-bar">
+                <span class="viz-panel-tag">Layer Attention Weights</span>
+                <span class="viz-panel-res">25-Layer WavLM</span>
+              </div>
+              <img src="/images/layer_weights_distribution.png" alt="Layer Weights Distribution" class="viz-panel-img">
+              <div class="viz-panel-cap"><strong>Figure 2: Dynamic 25-Layer Softmax Attention Weights</strong> &mdash; Acoustic textures (lower layers) vs. Semantic prosody (upper layers).</div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+    <div id="page3" class="page-view">
+      <div class="audit-page">
+        <div class="audit-header">
+          <div>
+            <h2 class="page-title">Live Multi-Domain Random Audit</h2>
+            <p style="font-family:var(--font-mono);font-size:10px;color:var(--chrome);margin-top:3px">Randomly select a balanced batch across domains and run live inference on local physical files.</p>
+          </div>
+          <button onclick="runAudit()" id="audit-btn" class="audit-run-btn" aria-label="Run Live Random Audit">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 1L3 9h5.5L7 15l7-8H8.5L9 1z"/></svg>
+            <span>Run Live Random Audit</span>
+          </button>
+        </div>
+        <div class="lab-table-wrap">
+          <table class="lab-table">
+            <thead><tr>
+              <th>Domain / Benchmark</th>
+              <th>Audio File</th>
+              <th>Ground Truth</th>
+              <th>Model Prediction</th>
+              <th class="num">Fake Probability (%)</th>
+              <th class="ctr">Verdict Status</th>
+            </tr></thead>
+            <tbody id="audit-tbody">
+              <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--chrome);font-family:var(--font-mono);font-size:11px">
+                Click <em>Run Live Random Audit</em> to begin batch evaluation.
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div id="audit-banner" class="audit-banner" style="margin-top:16px;">
+          <svg class="audit-banner-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3 8l3 3 7-7"/></svg>
+          <span id="audit-banner-text"></span>
+        </div>
+        <audio id="audit-audio-player" style="display:none"></audio>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ============================================================
+     OFFICIAL FORENSIC AUDIT CERTIFICATE (FOR PDF / PRINT)
+     ============================================================ -->
+<section id="forensic-report-certificate" class="forensic-report-certificate" aria-hidden="true">
+  <div class="cert-border-wrapper">
+    <header class="cert-header">
+      <div class="cert-header-left">
+        <div class="cert-seal">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
+          </svg>
+        </div>
+        <div>
+          <div class="cert-org-name">DEEPECHO FORENSIC AUDIO LABS</div>
+          <h1 class="cert-title">Speech Integrity &amp; Synthetic Audio Audit Certificate</h1>
+          <div class="cert-doc-meta">Automated Biometric Temporal Inference · 20ms Frame Hop · WavLM-Large 25-Layer Engine</div>
+        </div>
+      </div>
+      <div class="cert-header-right">
+        <div class="cert-badge-serial">CERTIFICATE: <span id="cert-doc-id">DE-2026-0925-A101</span></div>
+        <div class="cert-issue-date">Issued: <span id="cert-timestamp">2026-09-25 12:00:00 UTC</span></div>
+      </div>
+    </header>
+
+    <!-- Chain of Custody Section -->
+    <section class="cert-section">
+      <div class="cert-section-title">1. EVIDENCE &amp; CHAIN OF CUSTODY</div>
+      <div class="cert-custody-grid">
+        <div class="cert-custody-item">
+          <span class="cert-label">Evidence Filename:</span>
+          <strong id="cert-filename" class="cert-val">--</strong>
+        </div>
+        <div class="cert-custody-item">
+          <span class="cert-label">Analyzed Duration:</span>
+          <strong id="cert-duration" class="cert-val">--</strong>
+        </div>
+        <div class="cert-custody-item">
+          <span class="cert-label">Physical File Size:</span>
+          <strong id="cert-filesize" class="cert-val">--</strong>
+        </div>
+        <div class="cert-custody-item">
+          <span class="cert-label">Calibration Threshold (&tau;):</span>
+          <strong id="cert-threshold" class="cert-val">--</strong>
+        </div>
+        <div class="cert-custody-item full-width">
+          <span class="cert-label">Cryptographic SHA-256 Fingerprint:</span>
+          <code id="cert-sha256" class="cert-sha-code">----------------------------------------------------------------</code>
+        </div>
+      </div>
+    </section>
+
+    <!-- Forensic Verdict Section -->
+    <section class="cert-section">
+      <div class="cert-section-title">2. FORENSIC VERDICT &amp; CLASSIFICATION</div>
+      <div class="cert-verdict-box" id="cert-verdict-box">
+        <div class="cert-verdict-badge" id="cert-verdict-badge">AUTHENTIC HUMAN SPEECH</div>
+        <div class="cert-verdict-metrics">
+          <div class="cert-metric-col">
+            <span class="cert-label">Overall Synthetic Probability</span>
+            <div class="cert-metric-num" id="cert-prob-num">0.0%</div>
+          </div>
+          <div class="cert-metric-col">
+            <span class="cert-label">Decision Margin / Confidence</span>
+            <div class="cert-metric-num" id="cert-conf-num">0.0%</div>
+          </div>
+          <div class="cert-metric-col">
+            <span class="cert-label">Evaluated Temporal Frames</span>
+            <div class="cert-metric-num" id="cert-frames-num">--</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Detected Tamper Windows Table -->
+    <section class="cert-section">
+      <div class="cert-section-title">3. DETECTED TAMPER WINDOWS &amp; SPLICE LOCALIZATION</div>
+      <table class="cert-table" id="cert-tamper-table">
+        <thead>
+          <tr>
+            <th>Window #</th>
+            <th>Start Time</th>
+            <th>End Time</th>
+            <th>Duration</th>
+            <th>Peak Synthetic P(fake)</th>
+            <th>Classification</th>
+          </tr>
+        </thead>
+        <tbody id="cert-tamper-tbody">
+          <tr>
+            <td colspan="6" class="cert-empty-tamper">No localized synthetic or spliced speech detected. Speech patterns are consistent with authentic human vocal physiology.</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- High-Resolution Temporal Timeline Graph -->
+    <section class="cert-section">
+      <div class="cert-section-title">4. TEMPORAL FORENSIC TIMELINE (20ms RESOLUTION)</div>
+      <div class="cert-chart-container">
+        <img id="cert-chart-img" class="cert-chart-img" alt="Forensic Timeline Graph">
+      </div>
+    </section>
+
+    <!-- Official Footer & Verification Seal -->
+    <footer class="cert-footer">
+      <div class="cert-footer-disclaimer">
+        <strong>Notice of Forensic Authenticity:</strong> This document certifies automated biometric temporal inference performed by DeepEcho-SAM v2.0 utilizing transformer layer-aggregation across 25 layers of WavLM-Large. The cryptographic SHA-256 fingerprint provides chain-of-custody verification against the analyzed audio asset.
+      </div>
+      <div class="cert-signature-block">
+        <div class="cert-sig-line"></div>
+        <div class="cert-sig-title">DeepEcho Automated Forensic Authority</div>
+        <div class="cert-sig-meta">SHA-256 Validated Signature</div>
+      </div>
+    </footer>
+  </div>
+</section>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
