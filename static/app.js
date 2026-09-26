@@ -99,7 +99,7 @@ function initChart() {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
-      animation: { duration: 600, easing: 'easeOutExpo' },
+      animation: { duration: 1400, easing: 'easeOutExpo' },
       scales: {
         y: {
           min: 0, max: 1,
@@ -619,15 +619,10 @@ function sendAudioForPrediction(file) {
   const primary = document.getElementById('drop-zone-primary');
   if (primary) primary.textContent = file.name;
 
-  // Reset previous tamper states
-  const tamperBtn = document.getElementById('jump-tamper-btn');
-  if (tamperBtn) tamperBtn.style.display = 'none';
-  const regionsCont = document.getElementById('splice-regions-container');
-  if (regionsCont) regionsCont.innerHTML = '';
-  if (wsRegions) { try { wsRegions.clearRegions(); } catch(e){} }
-  resetRespiratoryWidget();
+  // Reset UI and clear any pending cascade timers
+  resetUIForAnalysis();
 
-  // Show loading
+  // Show loading overlay
   const overlay = document.getElementById('loading-overlay');
   overlay.classList.add('visible');
 
@@ -635,7 +630,6 @@ function sendAudioForPrediction(file) {
   const objUrl = URL.createObjectURL(file);
   wavesurfer.load(objUrl);
   document.getElementById('play-pause-btn').disabled = false;
-  triggerLaserScan();
 
   fetch('/api/predict', { method: 'POST', body: formData })
     .then(r => r.json())
@@ -651,14 +645,93 @@ function sendAudioForPrediction(file) {
     });
 }
 
-// ── Forensic Animation Utilities ──────────────────────────────
+// ── Forensic Animation Utilities & Cascade Manager ─────────────
+let currentAnalysisSequenceId = 0;
+let analysisCascadeTimers = [];
+
+function clearAnalysisCascade() {
+  currentAnalysisSequenceId++;
+  analysisCascadeTimers.forEach(t => clearTimeout(t));
+  analysisCascadeTimers = [];
+}
+
+function scheduleAnalysisStep(delay, fn) {
+  const seqId = currentAnalysisSequenceId;
+  const timer = setTimeout(() => {
+    if (seqId === currentAnalysisSequenceId) {
+      fn();
+    }
+  }, delay);
+  analysisCascadeTimers.push(timer);
+  return timer;
+}
+
+function resetUIForAnalysis() {
+  clearAnalysisCascade();
+
+  // Reset Export buttons
+  const expBtn = document.getElementById('export-pdf-btn');
+  if (expBtn) {
+    expBtn.disabled = true;
+    expBtn.classList.remove('btn-unlocked');
+  }
+  const vCertBtn = document.getElementById('verdict-cert-btn');
+  if (vCertBtn) {
+    vCertBtn.disabled = true;
+    vCertBtn.classList.remove('btn-unlocked');
+  }
+
+  // Reset Waveform Splice Tamper states
+  const tamperBtn = document.getElementById('jump-tamper-btn');
+  if (tamperBtn) tamperBtn.style.display = 'none';
+  const regionsCont = document.getElementById('splice-regions-container');
+  if (regionsCont) regionsCont.innerHTML = '';
+  if (wsRegions) { try { wsRegions.clearRegions(); } catch(e){} }
+
+  // Reset Verdict Cell to standby
+  const verdictCell = document.getElementById('verdict-cell');
+  const verdictText = document.getElementById('verdict-text');
+  const verdictFill = document.getElementById('verdict-vu-fill');
+  const verdictPct  = document.getElementById('verdict-vu-pct');
+  const verdictSub  = document.getElementById('verdict-subtext');
+  if (verdictCell) verdictCell.classList.remove('state-authentic', 'state-synthetic', 'state-splice');
+  if (verdictText) {
+    verdictText.textContent = 'ANALYZING SIGNAL...';
+    verdictText.classList.remove('reveal-anim');
+  }
+  if (verdictFill) verdictFill.style.width = '0%';
+  if (verdictPct) verdictPct.textContent = '0.0%';
+  if (verdictSub) {
+    verdictSub.textContent = '';
+    verdictSub.classList.remove('visible');
+  }
+
+  // Reset Telemetry Metrics to idle
+  const probEl = document.getElementById('metric-prob');
+  const confEl = document.getElementById('metric-conf');
+  const durEl  = document.getElementById('metric-dur');
+  const frEl   = document.getElementById('metric-frames');
+  const probBar = document.getElementById('prob-bar');
+  const confBar = document.getElementById('conf-bar');
+
+  if (probEl) { probEl.textContent = '--.--%'; probEl.className = 'metric-value idle'; probEl.style.color = ''; }
+  if (confEl) { confEl.textContent = '--.--%'; confEl.className = 'metric-value idle'; }
+  if (durEl)  { durEl.textContent = '---.-s'; durEl.className = 'metric-value idle'; }
+  if (frEl)   { frEl.textContent = '-- active frames'; }
+  if (probBar) probBar.style.width = '0%';
+  if (confBar) confBar.style.width = '0%';
+
+  // Reset Respiratory Instrument
+  resetRespiratoryWidget();
+}
+
 function triggerLaserScan() {
   const laser = document.getElementById('waveform-laser-scan');
   if (!laser) return;
   laser.classList.remove('scanning');
   void laser.offsetWidth; // Force CSS reflow
   laser.classList.add('scanning');
-  setTimeout(() => laser.classList.remove('scanning'), 1200);
+  setTimeout(() => laser.classList.remove('scanning'), 2400);
 }
 
 function animateValue(el, start, end, duration, decimals = 1, suffix = '%') {
@@ -681,96 +754,199 @@ function animateValue(el, start, end, duration, decimals = 1, suffix = '%') {
   requestAnimationFrame(tick);
 }
 
-// ── Update UI after prediction ────────────────────────────────
+function animateLungFill(targetPct, isViolation, isDepleted, duration = 1400) {
+  const lungFill = document.getElementById('lung-fill-rect');
+  const lungSurf = document.getElementById('lung-fill-meniscus');
+  if (!lungFill && !lungSurf) return;
+
+  const span = 96;
+  const bottomY = 110;
+  const startTime = performance.now();
+  const fillGradient = (isViolation || isDepleted) ? 'url(#lung-grad-alert)' : 'url(#lung-grad-healthy)';
+  const meniscusColor = (isViolation || isDepleted) ? '#FF2D55' : '#00FF88';
+
+  if (lungFill) lungFill.setAttribute('fill', fillGradient);
+  if (lungSurf) lungSurf.setAttribute('stroke', meniscusColor);
+
+  function frame(now) {
+    const elapsed = Math.min(1, (now - startTime) / duration);
+    const ease = elapsed === 1 ? 1 : 1 - Math.pow(2, -10 * elapsed);
+    const curPct = targetPct * ease;
+    const curHeight = (curPct / 100) * span;
+    const curY = bottomY - curHeight;
+
+    if (lungFill) {
+      lungFill.setAttribute('y', curY.toFixed(1));
+      lungFill.setAttribute('height', curHeight.toFixed(1));
+    }
+    if (lungSurf) {
+      lungSurf.setAttribute('y1', curY.toFixed(1));
+      lungSurf.setAttribute('y2', curY.toFixed(1));
+      lungSurf.style.opacity = curPct > 2 ? '0.9' : '0';
+    }
+
+    if (elapsed < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      const finalHeight = (targetPct / 100) * span;
+      const finalY = bottomY - finalHeight;
+      if (lungFill) {
+        lungFill.setAttribute('y', finalY.toFixed(1));
+        lungFill.setAttribute('height', finalHeight.toFixed(1));
+      }
+      if (lungSurf) {
+        lungSurf.setAttribute('y1', finalY.toFixed(1));
+        lungSurf.setAttribute('y2', finalY.toFixed(1));
+        lungSurf.style.opacity = targetPct > 2 ? '0.9' : '0';
+      }
+    }
+  }
+
+  requestAnimationFrame(frame);
+}
+
+// ── Update UI after prediction (Top-to-Bottom Orchestration) ───
 function updateUI(result) {
   lastAnalysisResult = result;
   currentTamperIdx = 0;
+  clearAnalysisCascade();
 
-  // Trigger laser scan sweep across waveform
+  const totalDur = result.analyzed_duration_sec || result.duration_seconds || 1.0;
+  const fakePct  = (result.fake_probability * 100).toFixed(1);
+  const confPct  = parseFloat(result.confidence_percentage).toFixed(1);
+  const probVal  = result.fake_probability;
+
+  // ════════════════════════════════════════════════════════════
+  // STAGE 1 (t = 0ms): TOP — Waveform Ingestion & CRT Laser Sweep
+  // ════════════════════════════════════════════════════════════
   triggerLaserScan();
 
-  // Enable Forensic Export buttons
-  const expBtn = document.getElementById('export-pdf-btn');
-  if (expBtn) expBtn.disabled = false;
-  const vCertBtn = document.getElementById('verdict-cert-btn');
-  if (vCertBtn) vCertBtn.disabled = false;
+  // As the laser sweeps through the waveform, reveal splice/tamper segments
+  scheduleAnalysisStep(450, () => {
+    renderSpliceRegions(result.fake_segments, totalDur);
+  });
 
-  const fakePct = (result.fake_probability * 100).toFixed(1);
-  const confPct = parseFloat(result.confidence_percentage).toFixed(1);
+  // ════════════════════════════════════════════════════════════
+  // STAGE 2 (t = 800ms): MID — Forensic Timeline (20ms frames)
+  // ════════════════════════════════════════════════════════════
+  scheduleAnalysisStep(800, () => {
+    updateChart(
+      result.timeline_399_frames,
+      result.decision_threshold,
+      result.splice_timestamp,
+      totalDur
+    );
+  });
 
-  // Metric values with odometer rolling tickers
-  const probEl = document.getElementById('metric-prob');
-  const confEl = document.getElementById('metric-conf');
-  const durEl  = document.getElementById('metric-dur');
-  const frEl   = document.getElementById('metric-frames');
+  // ════════════════════════════════════════════════════════════
+  // STAGE 3 (t = 1500ms): BOTTOM-LEFT — Forensic Verdict Cell
+  // ════════════════════════════════════════════════════════════
+  scheduleAnalysisStep(1500, () => {
+    const verdictCell = document.getElementById('verdict-cell');
+    const verdictText = document.getElementById('verdict-text');
+    const verdictFill = document.getElementById('verdict-vu-fill');
+    const verdictPct  = document.getElementById('verdict-vu-pct');
+    const verdictSub  = document.getElementById('verdict-subtext');
 
-  animateValue(probEl, 0, parseFloat(fakePct), 700, 1, '%');
-  animateValue(confEl, 0, parseFloat(confPct), 700, 1, '%');
-  durEl.textContent  = (result.analyzed_duration_sec || result.duration_seconds) + 's';
-  frEl.textContent   = (result.active_speech_frames || 0) + ' active frames';
+    if (verdictCell) verdictCell.classList.remove('state-authentic', 'state-synthetic', 'state-splice');
+    if (verdictSub) verdictSub.classList.remove('visible');
 
-  probEl.classList.remove('idle');
-  confEl.classList.remove('idle');
-  durEl.classList.remove('idle');
+    if (result.splice_detected) {
+      if (verdictCell) verdictCell.classList.add('state-splice');
+      if (verdictSub) {
+        verdictSub.textContent = 'Splice localized at t \u2248 ' + result.splice_timestamp + 's';
+        verdictSub.classList.add('visible');
+      }
+    } else if (result.is_fake) {
+      if (verdictCell) verdictCell.classList.add('state-synthetic');
+    } else {
+      if (verdictCell) verdictCell.classList.add('state-authentic');
+    }
 
-  // Metric color for prob
-  const probVal = result.fake_probability;
-  if (probVal >= 0.7)      probEl.style.color = 'var(--heat-red)';
-  else if (probVal >= 0.4) probEl.style.color = 'var(--amber-sig)';
-  else                     probEl.style.color = 'var(--phosphor)';
+    const fillWidth = Math.min(100, probVal * 100).toFixed(1) + '%';
+    if (verdictFill) verdictFill.style.width = fillWidth;
+    if (verdictPct)  animateValue(verdictPct, 0, parseFloat(fakePct), 1400, 1, '%');
 
-  // Metric bars
-  const probBar = document.getElementById('prob-bar');
-  const confBar = document.getElementById('conf-bar');
-  if (probBar) {
-    probBar.style.width = (probVal * 100) + '%';
-    probBar.style.background = probVal >= 0.7 ? 'var(--heat-red)' : probVal >= 0.4 ? 'var(--amber-sig)' : 'var(--phosphor)';
-  }
-  if (confBar) confBar.style.width = confPct + '%';
+    if (verdictText) {
+      verdictText.textContent = result.verdict;
+      verdictText.classList.remove('reveal-anim');
+      void verdictText.offsetWidth; // Force CSS reflow
+      verdictText.classList.add('reveal-anim');
+    }
+  });
 
-  // Verdict cell
-  const verdictCell = document.getElementById('verdict-cell');
-  const verdictText = document.getElementById('verdict-text');
-  const verdictFill = document.getElementById('verdict-vu-fill');
-  const verdictPct  = document.getElementById('verdict-vu-pct');
-  const verdictSub  = document.getElementById('verdict-subtext');
+  // ════════════════════════════════════════════════════════════
+  // STAGE 4 (t = 1900ms): BOTTOM — Biomechanical Respiration HUD
+  // ════════════════════════════════════════════════════════════
+  scheduleAnalysisStep(1900, () => {
+    updateRespiratoryWidget(result.respiratory_aerodynamics);
+  });
 
-  verdictCell.classList.remove('state-authentic', 'state-synthetic', 'state-splice');
-  verdictSub.classList.remove('visible');
+  // ════════════════════════════════════════════════════════════
+  // STAGE 5 (t = 2300ms - 2700ms): BOTTOM-RIGHT — Telemetry Metrics
+  // ════════════════════════════════════════════════════════════
+  // 5a. Metric 1: Fake Probability
+  scheduleAnalysisStep(2300, () => {
+    const probEl = document.getElementById('metric-prob');
+    const probBar = document.getElementById('prob-bar');
+    if (probEl) {
+      probEl.classList.remove('idle');
+      if (probVal >= 0.7)      probEl.style.color = 'var(--heat-red)';
+      else if (probVal >= 0.4) probEl.style.color = 'var(--amber-sig)';
+      else                     probEl.style.color = 'var(--phosphor)';
+      animateValue(probEl, 0, parseFloat(fakePct), 1400, 1, '%');
+    }
+    if (probBar) {
+      probBar.style.width = (probVal * 100) + '%';
+      probBar.style.background = probVal >= 0.7 ? 'var(--heat-red)' : probVal >= 0.4 ? 'var(--amber-sig)' : 'var(--phosphor)';
+    }
+  });
 
-  const fillWidth = Math.min(100, probVal * 100).toFixed(1) + '%';
-  if (verdictFill) verdictFill.style.width = fillWidth;
-  if (verdictPct)  animateValue(verdictPct, 0, parseFloat(fakePct), 700, 1, '%');
+  // 5b. Metric 2: Confidence Margin
+  scheduleAnalysisStep(2500, () => {
+    const confEl = document.getElementById('metric-conf');
+    const confBar = document.getElementById('conf-bar');
+    if (confEl) {
+      confEl.classList.remove('idle');
+      animateValue(confEl, 0, parseFloat(confPct), 1400, 1, '%');
+    }
+    if (confBar) {
+      confBar.style.width = confPct + '%';
+    }
+  });
 
-  verdictText.textContent = result.verdict;
-  verdictText.classList.remove('reveal-anim');
-  void verdictText.offsetWidth; // Force CSS reflow
-  verdictText.classList.add('reveal-anim');
+  // 5c. Metric 3: Evaluated Duration & Speech Frames
+  scheduleAnalysisStep(2700, () => {
+    const durEl = document.getElementById('metric-dur');
+    const frEl  = document.getElementById('metric-frames');
+    if (durEl) {
+      durEl.classList.remove('idle');
+      durEl.textContent = (result.analyzed_duration_sec || result.duration_seconds) + 's';
+    }
+    if (frEl) {
+      frEl.textContent = (result.active_speech_frames || 0) + ' active frames';
+    }
+  });
 
-  if (result.splice_detected) {
-    verdictCell.classList.add('state-splice');
-    verdictSub.textContent = 'Splice localized at t \u2248 ' + result.splice_timestamp + 's';
-    verdictSub.classList.add('visible');
-  } else if (result.is_fake) {
-    verdictCell.classList.add('state-synthetic');
-  } else {
-    verdictCell.classList.add('state-authentic');
-  }
-
-  // Timeline
-  updateChart(
-    result.timeline_399_frames,
-    result.decision_threshold,
-    result.splice_timestamp,
-    result.analyzed_duration_sec || result.duration_seconds
-  );
-
-  // Render Splice Regions & Jump to Tamper
-  const totalDur = result.analyzed_duration_sec || result.duration_seconds || 1.0;
-  renderSpliceRegions(result.fake_segments, totalDur);
-
-  // Update respiratory aerodynamics widget
-  updateRespiratoryWidget(result.respiratory_aerodynamics);
+  // ════════════════════════════════════════════════════════════
+  // STAGE 6 (t = 2900ms): FINAL — Certificate Generation Unlocked
+  // ════════════════════════════════════════════════════════════
+  scheduleAnalysisStep(2900, () => {
+    const expBtn = document.getElementById('export-pdf-btn');
+    if (expBtn) {
+      expBtn.disabled = false;
+      expBtn.classList.remove('btn-unlocked');
+      void expBtn.offsetWidth;
+      expBtn.classList.add('btn-unlocked');
+    }
+    const vCertBtn = document.getElementById('verdict-cert-btn');
+    if (vCertBtn) {
+      vCertBtn.disabled = false;
+      vCertBtn.classList.remove('btn-unlocked');
+      void vCertBtn.offsetWidth;
+      vCertBtn.classList.add('btn-unlocked');
+    }
+  });
 }
 
 // ── Respiratory Aerodynamics Widget & Dynamic Lung HUD ────────
@@ -872,7 +1048,7 @@ function updateRespiratoryWidget(aeroData) {
 
   // 2. Telemetry Card: Lung Air Reserve %
   if (capText) {
-    animateValue(capText, 0, lungPct, 650, 1, '%');
+    animateValue(capText, 0, lungPct, 1500, 1, '%');
     capText.classList.remove('idle');
     capText.style.color = (isViolation || isDepleted) ? 'var(--heat-red)' : 'var(--data-teal)';
   }
@@ -884,7 +1060,7 @@ function updateRespiratoryWidget(aeroData) {
 
   // 3. Telemetry Card: Max Phonation Seconds
   if (phonVal) {
-    animateValue(phonVal, 0, phonSec, 650, 2, ' s');
+    animateValue(phonVal, 0, phonSec, 1500, 2, ' s');
     phonVal.classList.remove('idle');
     phonVal.style.color = phonSec >= 7.5 ? 'var(--heat-red)' : 'var(--data-teal)';
   }
@@ -904,28 +1080,7 @@ function updateRespiratoryWidget(aeroData) {
   }
 
   // 5. Dynamic Anatomical Lung SVG Graphic Fill
-  // Base line y=110 (0% capacity), Apex line y=14 (100% capacity). Active height span = 96px.
-  const span = 96;
-  const bottomY = 110;
-  const fillHeight = (lungPct / 100) * span;
-  const fillY = bottomY - fillHeight;
-
-  if (lungFill) {
-    requestAnimationFrame(() => {
-      lungFill.setAttribute('y', fillY.toFixed(1));
-      lungFill.setAttribute('height', fillHeight.toFixed(1));
-      lungFill.setAttribute('fill', (isViolation || isDepleted) ? 'url(#lung-grad-alert)' : 'url(#lung-grad-healthy)');
-    });
-  }
-
-  if (lungSurf) {
-    requestAnimationFrame(() => {
-      lungSurf.setAttribute('y1', fillY.toFixed(1));
-      lungSurf.setAttribute('y2', fillY.toFixed(1));
-      lungSurf.setAttribute('stroke', (isViolation || isDepleted) ? '#FF2D55' : '#00FF88');
-      lungSurf.style.opacity = lungPct > 2 ? '0.9' : '0';
-    });
-  }
+  animateLungFill(lungPct, isViolation, isDepleted, 1400);
 
   // 6. Lung HUD Container State
   if (lungViz) {
@@ -1025,7 +1180,7 @@ function jumpToTamper() {
   if (wavesurfer) {
     const curTime = wavesurfer.getCurrentTime();
     const startTime = performance.now();
-    const glideDur = 240; // 240ms smooth glide
+    const glideDur = 500; // 500ms smooth glide
 
     function glideSeek(now) {
       const elapsed = Math.min(1, (now - startTime) / glideDur);
@@ -1240,7 +1395,7 @@ function runAudit() {
 
   btn.disabled = true;
   btn.innerHTML = `
-    <div style="width:14px;height:14px;border:1.5px solid var(--grid);border-top-color:var(--phosphor);border-radius:50%;animation:spin 0.8s linear infinite"></div>
+    <div style="width:14px;height:14px;border:1.5px solid var(--grid);border-top-color:var(--phosphor);border-radius:50%;animation:spin 2s linear infinite"></div>
     <span>Running Audit...</span>`;
 
   tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--chrome);font-family:var(--font-mono);font-size:11px">Executing multi-domain batch evaluation on local WavLM engine&hellip;</td></tr>`;
@@ -1254,7 +1409,7 @@ function runAudit() {
     .then(data => {
       tbody.innerHTML = '';
 
-      data.results.forEach(r => {
+      data.results.forEach((r, idx) => {
         const badge = r.pass
           ? '<span class="audit-pass-badge"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 8l3 3 7-7"/></svg>PASS</span>'
           : '<span class="audit-fail-badge"><svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 4l8 8M12 4l-8 8"/></svg>FAIL</span>';
@@ -1270,6 +1425,8 @@ function runAudit() {
         const probVal = (r.fake_probability !== undefined) ? r.fake_probability : r.score;
 
         const tr = document.createElement('tr');
+        tr.className = 'audit-row-anim';
+        tr.style.animationDelay = `${idx * 80}ms`;
         tr.innerHTML = `
           <td style="color:var(--text-strong);font-weight:500">${r.domain}</td>
           <td>
