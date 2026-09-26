@@ -1963,12 +1963,13 @@ function getSupportedMimeType() {
   return '';
 }
 
-// ── WAV encoder (PCM 16-bit LE, mono, 16kHz) ─────────────────
+// ── WAV encoder (PCM 16-bit LE, mono, native rate) ─────────────────
 // Accepts an AudioBuffer, returns a Blob ('audio/wav').
+// Preserves pristine native sample rate (44.1kHz / 48kHz) so backend
+// librosa performs high-order anti-aliased band-limited sinc resampling.
 function encodeWAV(audioBuffer) {
   const numChannels = 1;                        // always mix to mono
-  const sampleRate  = audioBuffer.sampleRate;   // usually 16000 or 48000
-  const TARGET_SR   = 16000;
+  const sampleRate  = audioBuffer.sampleRate;   // preserve native rate (prevents aliasing)
 
   // Mix all channels to mono float32
   let samples = audioBuffer.getChannelData(0).slice();
@@ -1978,17 +1979,6 @@ function encodeWAV(audioBuffer) {
       for (let i = 0; i < samples.length; i++) samples[i] += ch[i];
     }
     for (let i = 0; i < samples.length; i++) samples[i] /= audioBuffer.numberOfChannels;
-  }
-
-  // Simple linear downsample if the AudioContext decoded at a higher rate
-  if (audioBuffer.sampleRate !== TARGET_SR) {
-    const ratio     = audioBuffer.sampleRate / TARGET_SR;
-    const outLen    = Math.round(samples.length / ratio);
-    const resampled = new Float32Array(outLen);
-    for (let i = 0; i < outLen; i++) {
-      resampled[i] = samples[Math.min(Math.round(i * ratio), samples.length - 1)];
-    }
-    samples = resampled;
   }
 
   // Convert float32 → int16
@@ -2011,8 +2001,8 @@ function encodeWAV(audioBuffer) {
   view.setUint32(16, 16,           true);   // Subchunk1Size (PCM)
   view.setUint16(20, 1,            true);   // AudioFormat    = PCM
   view.setUint16(22, numChannels,  true);   // NumChannels
-  view.setUint32(24, TARGET_SR,    true);   // SampleRate
-  view.setUint32(28, TARGET_SR * 2,true);   // ByteRate
+  view.setUint32(24, sampleRate,   true);   // SampleRate
+  view.setUint32(28, sampleRate * 2, true); // ByteRate
   view.setUint16(32, 2,            true);   // BlockAlign
   view.setUint16(34, 16,           true);   // BitsPerSample
   writeStr(36, 'data');
@@ -2023,3 +2013,4 @@ function encodeWAV(audioBuffer) {
 
   return new Blob([buffer], { type: 'audio/wav' });
 }
+
