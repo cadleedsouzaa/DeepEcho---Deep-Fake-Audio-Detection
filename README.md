@@ -7,7 +7,6 @@
   <img src="https://img.shields.io/badge/Temporal%20Resolution-20.05ms%20Hop-FFB800?style=for-the-badge" alt="20ms Hop">
   <img src="https://img.shields.io/badge/SOTA%20In--The--Wild%20EER-8.02%25-00FF88?style=for-the-badge" alt="EER 8.02%">
   <img src="https://img.shields.io/badge/FastAPI-Production%20Ready-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI">
-  <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="License">
 </p>
 
 ---
@@ -254,10 +253,3 @@ To request access to the complete PyTorch training codebase and pre-trained weig
 * **Project Maintainer**: Cadlee D'Souza
 * **GitHub Repository**: [DeepEcho-SAM](https://github.com/cadleedsouzaa/DeepEcho---Deep-Fake-Audio-Detection)
 * **Topic**: DeepFake Audio Detection, Audio Forensics, Speech Synthesis Detection
-
----
-
-## 📄 License
-
-The web workstation interface, audit reporting system, and demonstration code are licensed under the [MIT License](LICENSE).
-Model weights and checkpoint representations are proprietary.
