@@ -2105,6 +2105,328 @@ body {
   cursor: not-allowed;
 }
 
+/* --- Biomechanical Respiratory & Lung-Capacity Module (Inside Verdict Cell) --- */
+.aero-verdict-module {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--grid);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+}
+
+.aero-module-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.aero-module-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--chrome);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.aero-module-title svg {
+  color: var(--data-teal);
+  flex-shrink: 0;
+}
+
+/* Status Badge */
+.aero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+}
+
+.aero-badge-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.aero-badge.state-idle {
+  background: rgba(56, 86, 106, 0.12);
+  border: 1px solid var(--grid);
+  color: var(--chrome);
+}
+.aero-badge.state-idle .aero-badge-dot {
+  background: var(--chrome);
+}
+
+.aero-badge.state-natural {
+  background: rgba(0, 255, 136, 0.12);
+  border: 1px solid rgba(0, 255, 136, 0.5);
+  color: #00FF88;
+  text-shadow: 0 0 8px rgba(0, 255, 136, 0.5);
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.25), inset 0 0 6px rgba(0, 255, 136, 0.08);
+}
+.aero-badge.state-natural .aero-badge-dot {
+  background: #00FF88;
+  box-shadow: 0 0 8px #00FF88;
+}
+
+.aero-badge.state-violation {
+  background: rgba(255, 45, 85, 0.18);
+  border: 1px solid rgba(255, 45, 85, 0.7);
+  color: #FF2D55;
+  text-shadow: 0 0 10px rgba(255, 45, 85, 0.7);
+  box-shadow: 0 0 12px rgba(255, 45, 85, 0.35), inset 0 0 8px rgba(255, 45, 85, 0.15);
+  animation: badge-violation-blink 1.2s ease-in-out infinite alternate;
+}
+.aero-badge.state-violation .aero-badge-dot {
+  background: #FF2D55;
+  box-shadow: 0 0 10px #FF2D55;
+}
+
+@keyframes badge-violation-blink {
+  0% { opacity: 0.85; border-color: rgba(255, 45, 85, 0.4); box-shadow: 0 0 8px rgba(255, 45, 85, 0.2); }
+  100% { opacity: 1; border-color: rgba(255, 45, 85, 0.8); box-shadow: 0 0 16px rgba(255, 45, 85, 0.45); }
+}
+
+.aero-badge.state-warning {
+  background: rgba(255, 170, 0, 0.16);
+  border: 1px solid rgba(255, 170, 0, 0.65);
+  color: #FFAA00;
+  text-shadow: 0 0 8px rgba(255, 170, 0, 0.6);
+  box-shadow: 0 0 10px rgba(255, 170, 0, 0.3), inset 0 0 6px rgba(255, 170, 0, 0.1);
+  animation: badge-warning-pulse 1.4s ease-in-out infinite alternate;
+}
+.aero-badge.state-warning .aero-badge-dot {
+  background: #FFAA00;
+  box-shadow: 0 0 8px #FFAA00;
+}
+
+@keyframes badge-warning-pulse {
+  0% { border-color: rgba(255, 170, 0, 0.4); }
+  100% { border-color: rgba(255, 170, 0, 0.8); box-shadow: 0 0 14px rgba(255, 170, 0, 0.4); }
+}
+
+/* Module Body: Two-column grid (Lung Visualizer + Telemetry Stats) */
+.aero-module-body {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 14px;
+  align-items: center;
+}
+
+/* --- Lung Visualizer HUD Container --- */
+.lung-viz-container {
+  position: relative;
+  width: 150px;
+  height: 130px;
+  max-width: 155px;
+  background: rgba(6, 11, 18, 0.65);
+  border: 1px solid var(--grid);
+  border-radius: 4px;
+  padding: 4px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+  flex-shrink: 0;
+}
+
+.lung-viz-container.state-natural {
+  border-color: rgba(0, 200, 212, 0.3);
+  box-shadow: inset 0 0 12px rgba(0, 255, 136, 0.04);
+}
+
+.lung-viz-container.state-violation {
+  border-color: rgba(255, 45, 85, 0.5);
+  box-shadow: inset 0 0 16px rgba(255, 45, 85, 0.1), 0 0 10px rgba(255, 45, 85, 0.15);
+  animation: lung-alert-pulse 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes lung-alert-pulse {
+  0% { border-color: rgba(255, 45, 85, 0.35); }
+  100% { border-color: rgba(255, 45, 85, 0.7); box-shadow: inset 0 0 20px rgba(255, 45, 85, 0.15), 0 0 14px rgba(255, 45, 85, 0.25); }
+}
+
+.lung-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.lung-live-tag {
+  position: absolute;
+  bottom: 3px;
+  right: 6px;
+  font-family: var(--font-mono);
+  font-size: 7px;
+  color: var(--chrome);
+  letter-spacing: 0.1em;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Dynamic Fill & Meniscus Animations */
+.lung-fill-rect {
+  transition: y 1.2s var(--ease-out-expo), height 1.2s var(--ease-out-expo), fill 0.4s ease;
+}
+
+#lung-fill-meniscus {
+  transition: y1 1.2s var(--ease-out-expo), y2 1.2s var(--ease-out-expo), stroke 0.4s ease, opacity 0.3s ease;
+}
+
+.lung-contour {
+  transition: stroke 0.4s ease, filter 0.4s ease;
+}
+
+.lung-viz-container.state-natural .lung-airways {
+  animation: lung-subtle-breathe 4s ease-in-out infinite;
+}
+
+@keyframes lung-subtle-breathe {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 0.95; filter: drop-shadow(0 0 3px rgba(0, 255, 136, 0.4)); }
+}
+
+/* --- Telemetry Column --- */
+.aero-telemetry-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.aero-metrics-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.aero-metric-card {
+  background: rgba(12, 22, 34, 0.7);
+  border: 1px solid var(--grid);
+  border-radius: 3px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.aero-card-label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--chrome);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aero-card-label svg {
+  flex-shrink: 0;
+  color: var(--chrome);
+}
+
+.aero-card-val {
+  font-family: var(--font-mono);
+  font-size: 21px;
+  font-weight: 700;
+  color: var(--data-teal);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  transition: color 0.3s;
+}
+
+.aero-card-val.idle {
+  color: var(--chrome);
+}
+
+.aero-card-bar-track {
+  height: 3px;
+  background: var(--grid);
+  border-radius: 1.5px;
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.aero-card-bar-fill {
+  height: 100%;
+  border-radius: 1.5px;
+  background: var(--data-teal);
+  width: 0%;
+  transition: width 1s var(--ease-out-expo), background 0.4s;
+}
+
+.aero-card-bar-fill.depleted {
+  background: var(--heat-red);
+  box-shadow: 0 0 6px var(--heat-glow);
+}
+
+.aero-card-sub {
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  color: var(--chrome);
+  margin-top: 2px;
+}
+
+/* Diagnostic Readout Box */
+.aero-diag-card {
+  background: rgba(6, 11, 18, 0.55);
+  border: 1px solid var(--grid);
+  border-left: 2px solid var(--chrome);
+  border-radius: 3px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  transition: border-left-color 0.4s ease;
+}
+
+.aero-diag-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 600;
+  color: var(--chrome);
+  letter-spacing: 0.1em;
+}
+
+.aero-diag-detail {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--text-body);
+  line-height: 1.4;
+  transition: color 0.3s;
+}
+
+.aero-diag-detail.state-natural {
+  color: rgba(0, 255, 136, 0.85);
+}
+.aero-diag-detail.state-violation {
+  color: rgba(255, 45, 85, 0.95);
+}
+.aero-diag-detail.state-warning {
+  color: rgba(255, 170, 0, 0.9);
+}
+
 /* Jump to Tamper Action Button */
 .jump-tamper-btn {
   display: inline-flex;

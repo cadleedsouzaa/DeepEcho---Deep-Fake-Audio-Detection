@@ -121,7 +121,10 @@ function initChart() {
           titleFont: { family: "'JetBrains Mono', monospace", size: 9 },
           bodyFont:  { family: "'JetBrains Mono', monospace", size: 11 },
           callbacks: {
-            label: ctx => 'P(fake): ' + (ctx.raw * 100).toFixed(1) + '%'
+            label: ctx => {
+              if (ctx.datasetIndex === 1) return 'Threshold (\u03C4): ' + (ctx.raw * 100).toFixed(1) + '%';
+              return 'P(fake): ' + (ctx.raw * 100).toFixed(1) + '%';
+            }
           }
         }
       }
@@ -609,6 +612,7 @@ function sendAudioForPrediction(file) {
   const regionsCont = document.getElementById('splice-regions-container');
   if (regionsCont) regionsCont.innerHTML = '';
   if (wsRegions) { try { wsRegions.clearRegions(); } catch(e){} }
+  resetRespiratoryWidget();
 
   // Show loading
   const overlay = document.getElementById('loading-overlay');
@@ -714,6 +718,182 @@ function updateUI(result) {
   // Render Splice Regions & Jump to Tamper
   const totalDur = result.analyzed_duration_sec || result.duration_seconds || 1.0;
   renderSpliceRegions(result.fake_segments, totalDur);
+
+  // Update respiratory aerodynamics widget
+  updateRespiratoryWidget(result.respiratory_aerodynamics);
+}
+
+// ── Respiratory Aerodynamics Widget & Dynamic Lung HUD ────────
+function resetRespiratoryWidget() {
+  const badge     = document.getElementById('respiratory-badge');
+  const badgeText = document.getElementById('respiratory-badge-text');
+  const capText   = document.getElementById('lung-capacity-text');
+  const capBar    = document.getElementById('lung-capacity-bar');
+  const phonVal   = document.getElementById('max-phonation-val');
+  const detail    = document.getElementById('respiratory-detail');
+  const lungFill  = document.getElementById('lung-fill-rect');
+  const lungSurf  = document.getElementById('lung-fill-meniscus');
+  const lungViz   = document.getElementById('lung-viz-container');
+  const rightLobe = document.getElementById('lung-contour-right');
+  const leftLobe  = document.getElementById('lung-contour-left');
+  const diagCard  = document.querySelector('.aero-diag-card');
+
+  if (badge) {
+    badge.className = 'aero-badge state-idle';
+    if (badgeText) badgeText.textContent = 'STANDBY';
+  }
+  if (capText) {
+    capText.textContent = '--.-%';
+    capText.className = 'aero-card-val idle';
+    capText.style.color = '';
+  }
+  if (capBar) {
+    capBar.style.width = '0%';
+    capBar.classList.remove('depleted');
+  }
+  if (phonVal) {
+    phonVal.textContent = '--.- s';
+    phonVal.className = 'aero-card-val idle';
+    phonVal.style.color = '';
+  }
+  if (detail) {
+    detail.textContent = 'Awaiting audio ingest for aerodynamic subglottal analysis.';
+    detail.className = 'aero-diag-detail';
+  }
+  if (diagCard) diagCard.style.borderLeftColor = 'var(--chrome)';
+
+  if (lungFill) {
+    lungFill.setAttribute('y', '110');
+    lungFill.setAttribute('height', '0');
+    lungFill.setAttribute('fill', 'url(#lung-grad-healthy)');
+  }
+  if (lungSurf) {
+    lungSurf.setAttribute('y1', '110');
+    lungSurf.setAttribute('y2', '110');
+    lungSurf.style.opacity = '0';
+  }
+  if (lungViz) {
+    lungViz.className = 'lung-viz-container';
+  }
+  if (rightLobe) rightLobe.style.stroke = '';
+  if (leftLobe) leftLobe.style.stroke = '';
+}
+
+function updateRespiratoryWidget(aeroData) {
+  const badge     = document.getElementById('respiratory-badge');
+  const badgeText = document.getElementById('respiratory-badge-text');
+  const capText   = document.getElementById('lung-capacity-text');
+  const capBar    = document.getElementById('lung-capacity-bar');
+  const phonVal   = document.getElementById('max-phonation-val');
+  const detail    = document.getElementById('respiratory-detail');
+  const lungFill  = document.getElementById('lung-fill-rect');
+  const lungSurf  = document.getElementById('lung-fill-meniscus');
+  const lungViz   = document.getElementById('lung-viz-container');
+  const rightLobe = document.getElementById('lung-contour-right');
+  const leftLobe  = document.getElementById('lung-contour-left');
+  const diagCard  = document.querySelector('.aero-diag-card');
+
+  if (!aeroData) {
+    resetRespiratoryWidget();
+    return;
+  }
+
+  const status = aeroData.respiratory_status || '';
+  const rawPct = typeof aeroData.min_lung_capacity_pct === 'number' ? aeroData.min_lung_capacity_pct : 0;
+  const lungPct = Math.max(0, Math.min(100, rawPct));
+  const phonSec = typeof aeroData.longest_phonation_seconds === 'number' ? aeroData.longest_phonation_seconds : 0;
+  const isViolation = aeroData.aerodynamic_violation || status.includes('VIOLATION');
+  const isDepleted = lungPct < 25 || status.includes('DEPLETION');
+
+  // 1. Status Badge
+  if (badge) {
+    badge.className = 'aero-badge';
+    if (isViolation) {
+      badge.classList.add('state-violation');
+      if (badgeText) badgeText.textContent = 'VIOLATION DETECTED';
+    } else if (isDepleted) {
+      badge.classList.add('state-warning');
+      if (badgeText) badgeText.textContent = 'CRITICAL DEPLETION';
+    } else {
+      badge.classList.add('state-natural');
+      if (badgeText) badgeText.textContent = 'NATURAL RESPIRATION';
+    }
+  }
+
+  // 2. Telemetry Card: Lung Air Reserve %
+  if (capText) {
+    capText.textContent = lungPct.toFixed(1) + '%';
+    capText.classList.remove('idle');
+    capText.style.color = (isViolation || isDepleted) ? 'var(--heat-red)' : 'var(--data-teal)';
+  }
+  if (capBar) {
+    capBar.style.width = Math.max(2, lungPct) + '%';
+    if (isViolation || isDepleted) capBar.classList.add('depleted');
+    else capBar.classList.remove('depleted');
+  }
+
+  // 3. Telemetry Card: Max Phonation Seconds
+  if (phonVal) {
+    phonVal.textContent = phonSec.toFixed(2) + ' s';
+    phonVal.classList.remove('idle');
+    phonVal.style.color = phonSec >= 7.5 ? 'var(--heat-red)' : 'var(--data-teal)';
+  }
+
+  // 4. Biomechanical Diagnostic Detail
+  if (detail) {
+    detail.textContent = aeroData.respiratory_detail || '';
+    detail.className = 'aero-diag-detail';
+    if (isViolation) detail.classList.add('state-violation');
+    else if (isDepleted) detail.classList.add('state-warning');
+    else detail.classList.add('state-natural');
+  }
+  if (diagCard) {
+    if (isViolation) diagCard.style.borderLeftColor = 'var(--heat-red)';
+    else if (isDepleted) diagCard.style.borderLeftColor = 'var(--amber-sig)';
+    else diagCard.style.borderLeftColor = 'var(--phosphor)';
+  }
+
+  // 5. Dynamic Anatomical Lung SVG Graphic Fill
+  // Base line y=110 (0% capacity), Apex line y=14 (100% capacity). Active height span = 96px.
+  const span = 96;
+  const bottomY = 110;
+  const fillHeight = (lungPct / 100) * span;
+  const fillY = bottomY - fillHeight;
+
+  if (lungFill) {
+    requestAnimationFrame(() => {
+      lungFill.setAttribute('y', fillY.toFixed(1));
+      lungFill.setAttribute('height', fillHeight.toFixed(1));
+      lungFill.setAttribute('fill', (isViolation || isDepleted) ? 'url(#lung-grad-alert)' : 'url(#lung-grad-healthy)');
+    });
+  }
+
+  if (lungSurf) {
+    requestAnimationFrame(() => {
+      lungSurf.setAttribute('y1', fillY.toFixed(1));
+      lungSurf.setAttribute('y2', fillY.toFixed(1));
+      lungSurf.setAttribute('stroke', (isViolation || isDepleted) ? '#FF2D55' : '#00FF88');
+      lungSurf.style.opacity = lungPct > 2 ? '0.9' : '0';
+    });
+  }
+
+  // 6. Lung HUD Container State
+  if (lungViz) {
+    lungViz.className = 'lung-viz-container';
+    if (isViolation) {
+      lungViz.classList.add('state-violation');
+      if (rightLobe) rightLobe.style.stroke = 'rgba(255, 45, 85, 0.7)';
+      if (leftLobe) leftLobe.style.stroke = 'rgba(255, 45, 85, 0.7)';
+    } else if (isDepleted) {
+      lungViz.classList.add('state-warning');
+      if (rightLobe) rightLobe.style.stroke = 'rgba(255, 170, 0, 0.7)';
+      if (leftLobe) leftLobe.style.stroke = 'rgba(255, 170, 0, 0.7)';
+    } else {
+      lungViz.classList.add('state-natural');
+      if (rightLobe) rightLobe.style.stroke = 'rgba(0, 200, 212, 0.45)';
+      if (leftLobe) leftLobe.style.stroke = 'rgba(0, 200, 212, 0.45)';
+    }
+  }
 }
 
 // ── Splice Highlighting & Tamper Navigation ───────────────────

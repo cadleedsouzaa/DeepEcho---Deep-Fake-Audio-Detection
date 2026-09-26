@@ -8,7 +8,32 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
   <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v=2.3">
+  <style>
+    /* Critical fallback styles for respiratory module to ensure correct sizing and badge typography */
+    .aero-module-header { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important; }
+    .aero-badge {
+      display: inline-flex !important; align-items: center !important; gap: 6px !important; padding: 4px 9px !important; border-radius: 3px !important;
+      font-family: 'JetBrains Mono', monospace !important; font-size: 9.5px !important; font-weight: 700 !important;
+      letter-spacing: 0.08em !important; text-transform: uppercase !important; white-space: nowrap !important;
+    }
+    .aero-badge.state-warning {
+      background: rgba(255, 170, 0, 0.16) !important; border: 1px solid rgba(255, 170, 0, 0.65) !important;
+      color: #FFAA00 !important; text-shadow: 0 0 8px rgba(255, 170, 0, 0.6) !important;
+      box-shadow: 0 0 10px rgba(255, 170, 0, 0.3) !important;
+    }
+    .aero-badge.state-violation {
+      background: rgba(255, 45, 85, 0.18) !important; border: 1px solid rgba(255, 45, 85, 0.7) !important;
+      color: #FF2D55 !important; text-shadow: 0 0 10px rgba(255, 45, 85, 0.7) !important;
+      box-shadow: 0 0 12px rgba(255, 45, 85, 0.35) !important;
+    }
+    .aero-badge.state-natural {
+      background: rgba(0, 255, 136, 0.12) !important; border: 1px solid rgba(0, 255, 136, 0.5) !important;
+      color: #00FF88 !important; text-shadow: 0 0 8px rgba(0, 255, 136, 0.5) !important;
+      box-shadow: 0 0 10px rgba(0, 255, 136, 0.25) !important;
+    }
+    .lung-viz-container { width: 150px !important; height: 130px !important; max-width: 155px !important; flex-shrink: 0 !important; }
+  </style>
 </head>
 <body>
 <div class="app-shell">
@@ -256,6 +281,152 @@
               <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M11.5 1.5H3.5a1 1 0 00-1 1v11a1 1 0 001 1h9a1 1 0 001-1v-8.5l-2-2.5z"/><path d="M10.5 1.5v3h3"/><line x1="5.5" y1="8.5" x2="10.5" y2="8.5"/></svg>
               <span>Export Audit Certificate</span>
             </button>
+
+            <!-- BIOMECHANICAL RESPIRATORY & LUNG-CAPACITY INSTRUMENT -->
+            <div class="aero-verdict-module" id="aero-module">
+              <div class="aero-module-header">
+                <div class="aero-module-title">
+                  <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M2 8h2.5l1.5-4 2 8 2-6 1.5 3H14"/>
+                  </svg>
+                  <span>Biomechanical Respiration</span>
+                </div>
+                <div class="aero-badge state-idle" id="respiratory-badge">
+                  <span class="aero-badge-dot"></span>
+                  <span class="aero-badge-text" id="respiratory-badge-text">STANDBY</span>
+                </div>
+              </div>
+
+              <div class="aero-module-body">
+                <!-- Lung Capacity Schematic Graphic -->
+                <div class="lung-viz-container" id="lung-viz-container">
+                  <svg class="lung-svg" id="lung-svg" viewBox="0 0 150 120" preserveAspectRatio="xMidYMid meet">
+                    <defs>
+                      <!-- Dynamic liquid/air fill gradient (healthy phosphor-teal) -->
+                      <linearGradient id="lung-grad-healthy" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#00FF88" stop-opacity="0.92" />
+                        <stop offset="50%" stop-color="#00C8D4" stop-opacity="0.65" />
+                        <stop offset="100%" stop-color="#005566" stop-opacity="0.3" />
+                      </linearGradient>
+                      <!-- Dynamic liquid/air fill gradient (violation/depleted heat-red) -->
+                      <linearGradient id="lung-grad-alert" x1="0%" y1="0%" x2="0%" y2="100%">
+                        <stop offset="0%" stop-color="#FF2D55" stop-opacity="0.95" />
+                        <stop offset="55%" stop-color="#FF5C7A" stop-opacity="0.7" />
+                        <stop offset="100%" stop-color="#77001a" stop-opacity="0.3" />
+                      </linearGradient>
+
+                      <!-- Anatomical clip-path enclosing both lung lobes -->
+                      <clipPath id="lung-lobes-clip">
+                        <!-- Right lung lobe (anatomical right / viewer left) -->
+                        <path d="M 66 34 C 66 20 58 12 48 12 C 38 12 28 20 24 32 C 20 44 16 66 16 84 C 16 98 22 108 32 110 C 42 110 54 106 62 98 C 66 90 66 70 66 48 Z" />
+                        <!-- Left lung lobe (anatomical left / viewer right, with cardiac notch) -->
+                        <path d="M 84 34 C 84 20 92 12 102 12 C 112 12 122 20 126 32 C 130 44 134 66 134 84 C 134 98 128 108 118 110 C 108 110 98 106 90 98 C 82 88 80 72 84 56 Z" />
+                      </clipPath>
+
+                      <!-- Subtle CRT grid pattern for lung interior chamber -->
+                      <pattern id="lung-grid-pattern" width="6" height="6" patternUnits="userSpaceOnUse">
+                        <line x1="0" y1="6" x2="6" y2="6" stroke="rgba(26,43,60,0.5)" stroke-width="0.5"/>
+                        <line x1="6" y1="0" x2="6" y2="6" stroke="rgba(26,43,60,0.5)" stroke-width="0.5"/>
+                      </pattern>
+                    </defs>
+
+                    <!-- Calibration Scale Ticks on Left (0-100% Spirometer scale) -->
+                    <g class="lung-ticks" opacity="0.65" font-family="var(--font-mono)" font-size="6.5" fill="var(--chrome)" text-anchor="end">
+                      <line x1="7" y1="14" x2="12" y2="14" stroke="var(--chrome)" stroke-width="0.8"/>
+                      <text x="6" y="16">100</text>
+                      <line x1="9" y1="38" x2="12" y2="38" stroke="var(--grid-hi)" stroke-width="0.6"/>
+                      <line x1="7" y1="62" x2="12" y2="62" stroke="var(--chrome)" stroke-width="0.8"/>
+                      <text x="6" y="64">50</text>
+                      <line x1="9" y1="86" x2="12" y2="86" stroke="var(--heat-red)" stroke-width="0.8"/>
+                      <text x="6" y="88" fill="var(--heat-red)" opacity="0.8">25</text>
+                      <line x1="7" y1="110" x2="12" y2="110" stroke="var(--chrome)" stroke-width="0.8"/>
+                      <text x="6" y="112">0</text>
+                    </g>
+
+                    <!-- Empty Lung Chamber Silhouettes (Dark Glass Panel) -->
+                    <path class="lung-chamber-bg" d="M 66 34 C 66 20 58 12 48 12 C 38 12 28 20 24 32 C 20 44 16 66 16 84 C 16 98 22 108 32 110 C 42 110 54 106 62 98 C 66 90 66 70 66 48 Z" fill="rgba(12,22,34,0.85)" stroke="var(--grid)" stroke-width="1.2"/>
+                    <path class="lung-chamber-bg" d="M 84 34 C 84 20 92 12 102 12 C 112 12 122 20 126 32 C 130 44 134 66 134 84 C 134 98 128 108 118 110 C 108 110 98 106 90 98 C 82 88 80 72 84 56 Z" fill="rgba(12,22,34,0.85)" stroke="var(--grid)" stroke-width="1.2"/>
+
+                    <!-- Internal Grid Pattern -->
+                    <g clip-path="url(#lung-lobes-clip)">
+                      <rect x="14" y="10" width="122" height="102" fill="url(#lung-grid-pattern)" />
+                    </g>
+
+                    <!-- CLIPPED DYNAMIC AIR RESERVE FILL -->
+                    <g clip-path="url(#lung-lobes-clip)">
+                      <rect id="lung-fill-rect" x="12" y="110" width="126" height="0" fill="url(#lung-grad-healthy)" class="lung-fill-rect" />
+                      <!-- Luminous Meniscus Line -->
+                      <line id="lung-fill-meniscus" x1="14" y1="110" x2="136" y2="110" stroke="#00FF88" stroke-width="1.5" opacity="0" />
+                    </g>
+
+                    <!-- Anatomical Airway Tree (Trachea & Bronchi) -->
+                    <g class="lung-airways">
+                      <!-- Trachea tube (cartilaginous rings) -->
+                      <line x1="71" y1="6" x2="71" y2="34" stroke="var(--data-teal)" stroke-width="1.2" opacity="0.7"/>
+                      <line x1="79" y1="6" x2="79" y2="34" stroke="var(--data-teal)" stroke-width="1.2" opacity="0.7"/>
+                      <line x1="72" y1="9" x2="78" y2="9" stroke="var(--data-teal)" stroke-width="0.8" opacity="0.6"/>
+                      <line x1="72" y1="14" x2="78" y2="14" stroke="var(--data-teal)" stroke-width="0.8" opacity="0.6"/>
+                      <line x1="72" y1="19" x2="78" y2="19" stroke="var(--data-teal)" stroke-width="0.8" opacity="0.6"/>
+                      <line x1="72" y1="24" x2="78" y2="24" stroke="var(--data-teal)" stroke-width="0.8" opacity="0.6"/>
+                      <line x1="72" y1="29" x2="78" y2="29" stroke="var(--data-teal)" stroke-width="0.8" opacity="0.6"/>
+
+                      <!-- Right Primary Bronchus & Branches -->
+                      <path d="M 75 34 Q 68 40 56 46" stroke="var(--data-teal)" stroke-width="1.4" fill="none" opacity="0.85"/>
+                      <path d="M 56 46 Q 46 54 38 68" stroke="var(--data-teal)" stroke-width="1.0" fill="none" opacity="0.75"/>
+                      <path d="M 56 46 Q 52 64 50 82" stroke="var(--data-teal)" stroke-width="1.0" fill="none" opacity="0.75"/>
+                      <path d="M 50 82 Q 42 92 36 98" stroke="var(--data-teal)" stroke-width="0.7" fill="none" opacity="0.6"/>
+                      <path d="M 50 82 Q 54 94 56 100" stroke="var(--data-teal)" stroke-width="0.7" fill="none" opacity="0.6"/>
+                      <path d="M 38 68 Q 30 76 26 84" stroke="var(--data-teal)" stroke-width="0.7" fill="none" opacity="0.6"/>
+
+                      <!-- Left Primary Bronchus & Branches -->
+                      <path d="M 75 34 Q 82 40 94 46" stroke="var(--data-teal)" stroke-width="1.4" fill="none" opacity="0.85"/>
+                      <path d="M 94 46 Q 104 54 112 68" stroke="var(--data-teal)" stroke-width="1.0" fill="none" opacity="0.75"/>
+                      <path d="M 94 46 Q 98 64 100 82" stroke="var(--data-teal)" stroke-width="1.0" fill="none" opacity="0.75"/>
+                      <path d="M 100 82 Q 108 92 114 98" stroke="var(--data-teal)" stroke-width="0.7" fill="none" opacity="0.6"/>
+                      <path d="M 100 82 Q 96 94 94 100" stroke="var(--data-teal)" stroke-width="0.7" fill="none" opacity="0.6"/>
+                      <path d="M 112 68 Q 120 76 124 84" stroke="var(--data-teal)" stroke-width="0.7" fill="none" opacity="0.6"/>
+                    </g>
+
+                    <!-- Glowing Outer Lobe Contours -->
+                    <path id="lung-contour-right" class="lung-contour" d="M 66 34 C 66 20 58 12 48 12 C 38 12 28 20 24 32 C 20 44 16 66 16 84 C 16 98 22 108 32 110 C 42 110 54 106 62 98 C 66 90 66 70 66 48 Z" fill="none" stroke="rgba(0, 200, 212, 0.45)" stroke-width="1.2"/>
+                    <path id="lung-contour-left" class="lung-contour" d="M 84 34 C 84 20 92 12 102 12 C 112 12 122 20 126 32 C 130 44 134 66 134 84 C 134 98 128 108 118 110 C 108 110 98 106 90 98 C 82 88 80 72 84 56 Z" fill="none" stroke="rgba(0, 200, 212, 0.45)" stroke-width="1.2"/>
+                  </svg>
+                  <div class="lung-live-tag">SPIROMETRIC HUD</div>
+                </div>
+
+                <!-- Right Side Telemetry Stats & Diagnostic Readout -->
+                <div class="aero-telemetry-col">
+                  <!-- Row 1: The two numerical indicators -->
+                  <div class="aero-metrics-row">
+                    <div class="aero-metric-card">
+                      <div class="aero-card-label">
+                        <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="4" width="12" height="9" rx="1"/><line x1="5" y1="4" x2="5" y2="2"/><line x1="11" y1="4" x2="11" y2="2"/></svg>
+                        <span>Lung Air Reserve</span>
+                      </div>
+                      <div class="aero-card-val idle" id="lung-capacity-text">--.-%</div>
+                      <div class="aero-card-bar-track">
+                        <div class="aero-card-bar-fill" id="lung-capacity-bar" style="width: 0%;"></div>
+                      </div>
+                    </div>
+
+                    <div class="aero-metric-card">
+                      <div class="aero-card-label">
+                        <svg width="8" height="8" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="8" cy="8" r="6"/><line x1="8" y1="5" x2="8" y2="8"/><line x1="8" y1="8" x2="11" y2="10"/></svg>
+                        <span>Max Phonation</span>
+                      </div>
+                      <div class="aero-card-val idle" id="max-phonation-val">--.- s</div>
+                      <div class="aero-card-sub">limit: 7.5s</div>
+                    </div>
+                  </div>
+
+                  <!-- Row 2: Diagnostic text panel -->
+                  <div class="aero-diag-card">
+                    <div class="aero-diag-label">AERODYNAMIC BIOPRINT</div>
+                    <div class="aero-diag-detail" id="respiratory-detail">Awaiting audio ingest for aerodynamic subglottal analysis.</div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="metric-cell">
             <div class="metric-label">
@@ -284,6 +455,7 @@
             <div class="metric-sub" id="metric-frames">-- active frames</div>
           </div>
         </div>
+
       </div>
     </div>
     <div id="page2" class="page-view">
@@ -679,6 +851,6 @@
   </div>
 </section>
 
-<script src="/static/app.js"></script>
+<script src="/static/app.js?v=2.4"></script>
 </body>
 </html>

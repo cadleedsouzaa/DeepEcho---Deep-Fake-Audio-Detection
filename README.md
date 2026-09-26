@@ -93,6 +93,26 @@ The DeepEcho-SAM architecture integrates self-supervised speech representations 
 
 ---
 
+## 🖥️ Live Forensic Workstation in Action
+
+DeepEcho-SAM features an oscilloscope-grade dark-mode dashboard with millisecond timeline scrubbing, dynamic waveform splice highlighting, and a biomechanical respiratory HUD.
+
+### 🟢 1. Authentic Human Speech Detection
+When evaluating genuine human speech (such as live microphone recordings or natural conversations), the neural timeline remains flat in the green zone ($P(\text{fake}) \approx 3.9\%$), and the **Biomechanical Respiratory Tracker** confirms natural subglottal airflow conservation and physiological breath intervals ($74.4\%$ air reserve, glowing green lung HUD):
+
+<p align="center">
+  <img src="images/deepecho_authentic_human_detection.png" alt="DeepEcho-SAM Authentic Human Speech Detection" width="100%">
+</p>
+
+### 🔴 2. Synthetic Deepfake (AI Voice Clone) Detection
+When analyzing AI voice clones (such as high-end neural vocoder synthesis), the 25-layer WavLM model immediately triggers a red-alert forensic verdict (**`SYNTHETIC DEEPFAKE (AI CLONE)`** with $99.8\%$ probability), highlighting the exact spliced tamper region (`TAMPER (100%)`) across the waveform and pinning the forensic timeline to the synthetic boundary:
+
+<p align="center">
+  <img src="images/deepecho_synthetic_deepfake_detection.png" alt="DeepEcho-SAM Synthetic Deepfake AI Clone Detection" width="100%">
+</p>
+
+---
+
 ## ⚡ Key Capabilities
 
 ### 1. 🔍 Live Multi-Input Forensic Inspector (Page 1)
@@ -101,17 +121,22 @@ The DeepEcho-SAM architecture integrates self-supervised speech representations 
 * **Lossless Direct PCM Recording Engine**: Captures raw Float32 audio samples via the Web Audio API without WebM lossy compression, permanently preventing browser-level decode errors in Chromium, Brave, and Edge.
 * **Real-Time Web Audio Visualizer**: 60 FPS live oscilloscope canvas during microphone or browser tab audio recording.
 
-### 2. 🎯 Waveform Splice Highlighting & "Jump to Tamper"
+### 2. 🫁 Biomechanical Respiration & Lung-Capacity Tracker
+* **Physiological Breath Group Analysis**: Tracks continuous vocal phonation and models finite subglottal lung volume depletion ($\sim 3.5 - 5.0\text{L}$).
+* **Dynamic Anatomical Lung HUD**: An animated SVG lung schematic that dynamically fills with glowing phosphor-green fluid during natural breathing intervals and depletes to alert-crimson if sustained, breathless AI phonation ($>7.5\text{s}$) violates human pulmonary limits.
+* **Dual-Layer Defense**: Complements the 25-layer WavLM acoustic model with physical aerodynamic invariance.
+
+### 3. 🎯 Waveform Splice Highlighting & "Jump to Tamper"
 * **Automated Tamper Localization**: Contiguous runs of synthetic frames are grouped into structured tamper windows (`fake_segments`).
 * **Visual Region Overlay**: Overlays translucent red warning regions (`rgba(239, 68, 68, 0.25)`) with solid borders and tooltips directly on the audio waveform.
 * **Interactive "Jump to Tamper"**: One-click action button (`[ ⏩ Jump to Tamper (MM:SS) ]`) that scrubs playback immediately to the exact millisecond where synthetic audio begins.
 
-### 3. 📄 One-Click Forensic Audit Certificate (PDF Export)
+### 4. 📄 One-Click Forensic Audit Certificate (PDF Export)
 * **Chain-of-Custody Cryptographic Fingerprint**: Backend SHA-256 calculation guarantees tamper-evident validation for courtroom or enterprise security handoff.
 * **Executive Summary & Tamper Schedule**: Generates a standardized table of all detected synthetic segments (`Start Time`, `End Time`, `Duration`, `Max Confidence`).
 * **High-Resolution Timeline Graph Capture**: Embeds a live canvas snapshot of the 399-frame temporal probability curve with threshold boundaries into the printable PDF.
 
-### 4. 📊 Multi-Domain Benchmark Audit Suite (Page 2)
+### 5. 📊 Multi-Domain Benchmark Audit Suite (Page 2)
 * Live empirical auditor that runs random batches against verified corpora:
   * **MLAAD TTS**: Multilingual AI audio synthesis (ElevenLabs, Bark, Tortoise, etc.)
   * **CodecFake**: Neural audio codec artifacts (EnCodec, SoundStream, DAC, Lyra)
