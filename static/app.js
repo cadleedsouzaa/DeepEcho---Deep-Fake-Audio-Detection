@@ -49,8 +49,21 @@ document.addEventListener('DOMContentLoaded', () => {
     console.warn('WaveSurfer Regions plugin notice:', e);
   }
 
-  wavesurfer.on('play',  () => document.getElementById('play-icon').setAttribute('d', 'M4 3h3v10H4zm5 0h3v10H9z'));
-  wavesurfer.on('pause', () => document.getElementById('play-icon').setAttribute('d', 'M4 3l10 5-10 5z'));
+  wavesurfer.on('play', () => {
+    document.getElementById('play-icon').setAttribute('d', 'M4 3h3v10H4zm5 0h3v10H9z');
+    const lungViz = document.getElementById('lung-viz-container');
+    if (lungViz) lungViz.classList.add('playback-active');
+  });
+  wavesurfer.on('pause', () => {
+    document.getElementById('play-icon').setAttribute('d', 'M4 3l10 5-10 5z');
+    const lungViz = document.getElementById('lung-viz-container');
+    if (lungViz) lungViz.classList.remove('playback-active');
+  });
+  wavesurfer.on('finish', () => {
+    document.getElementById('play-icon').setAttribute('d', 'M4 3l10 5-10 5z');
+    const lungViz = document.getElementById('lung-viz-container');
+    if (lungViz) lungViz.classList.remove('playback-active');
+  });
 
   document.getElementById('play-pause-btn').addEventListener('click', () => {
     if (wavesurfer) wavesurfer.playPause();
@@ -622,6 +635,7 @@ function sendAudioForPrediction(file) {
   const objUrl = URL.createObjectURL(file);
   wavesurfer.load(objUrl);
   document.getElementById('play-pause-btn').disabled = false;
+  triggerLaserScan();
 
   fetch('/api/predict', { method: 'POST', body: formData })
     .then(r => r.json())
@@ -637,10 +651,43 @@ function sendAudioForPrediction(file) {
     });
 }
 
+// ── Forensic Animation Utilities ──────────────────────────────
+function triggerLaserScan() {
+  const laser = document.getElementById('waveform-laser-scan');
+  if (!laser) return;
+  laser.classList.remove('scanning');
+  void laser.offsetWidth; // Force CSS reflow
+  laser.classList.add('scanning');
+  setTimeout(() => laser.classList.remove('scanning'), 1200);
+}
+
+function animateValue(el, start, end, duration, decimals = 1, suffix = '%') {
+  if (!el) return;
+  const startTime = performance.now();
+  const diff = end - start;
+  el.classList.add('telemetry-spinning');
+  function tick(now) {
+    const elapsed = Math.min(1, (now - startTime) / duration);
+    const progress = elapsed === 1 ? 1 : 1 - Math.pow(2, -10 * elapsed);
+    const val = start + diff * progress;
+    el.textContent = val.toFixed(decimals) + suffix;
+    if (elapsed < 1) {
+      requestAnimationFrame(tick);
+    } else {
+      el.textContent = end.toFixed(decimals) + suffix;
+      el.classList.remove('telemetry-spinning');
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
 // ── Update UI after prediction ────────────────────────────────
 function updateUI(result) {
   lastAnalysisResult = result;
   currentTamperIdx = 0;
+
+  // Trigger laser scan sweep across waveform
+  triggerLaserScan();
 
   // Enable Forensic Export buttons
   const expBtn = document.getElementById('export-pdf-btn');
@@ -651,14 +698,14 @@ function updateUI(result) {
   const fakePct = (result.fake_probability * 100).toFixed(1);
   const confPct = parseFloat(result.confidence_percentage).toFixed(1);
 
-  // Metric values
+  // Metric values with odometer rolling tickers
   const probEl = document.getElementById('metric-prob');
   const confEl = document.getElementById('metric-conf');
   const durEl  = document.getElementById('metric-dur');
   const frEl   = document.getElementById('metric-frames');
 
-  probEl.textContent = fakePct + '%';
-  confEl.textContent = confPct + '%';
+  animateValue(probEl, 0, parseFloat(fakePct), 700, 1, '%');
+  animateValue(confEl, 0, parseFloat(confPct), 700, 1, '%');
   durEl.textContent  = (result.analyzed_duration_sec || result.duration_seconds) + 's';
   frEl.textContent   = (result.active_speech_frames || 0) + ' active frames';
 
@@ -693,9 +740,12 @@ function updateUI(result) {
 
   const fillWidth = Math.min(100, probVal * 100).toFixed(1) + '%';
   if (verdictFill) verdictFill.style.width = fillWidth;
-  if (verdictPct)  verdictPct.textContent = fakePct + '%';
+  if (verdictPct)  animateValue(verdictPct, 0, parseFloat(fakePct), 700, 1, '%');
 
   verdictText.textContent = result.verdict;
+  verdictText.classList.remove('reveal-anim');
+  void verdictText.offsetWidth; // Force CSS reflow
+  verdictText.classList.add('reveal-anim');
 
   if (result.splice_detected) {
     verdictCell.classList.add('state-splice');
@@ -822,7 +872,7 @@ function updateRespiratoryWidget(aeroData) {
 
   // 2. Telemetry Card: Lung Air Reserve %
   if (capText) {
-    capText.textContent = lungPct.toFixed(1) + '%';
+    animateValue(capText, 0, lungPct, 650, 1, '%');
     capText.classList.remove('idle');
     capText.style.color = (isViolation || isDepleted) ? 'var(--heat-red)' : 'var(--data-teal)';
   }
@@ -834,7 +884,7 @@ function updateRespiratoryWidget(aeroData) {
 
   // 3. Telemetry Card: Max Phonation Seconds
   if (phonVal) {
-    phonVal.textContent = phonSec.toFixed(2) + ' s';
+    animateValue(phonVal, 0, phonSec, 650, 2, ' s');
     phonVal.classList.remove('idle');
     phonVal.style.color = phonSec >= 7.5 ? 'var(--heat-red)' : 'var(--data-teal)';
   }
@@ -970,8 +1020,36 @@ function jumpToTamper() {
   const segments = lastAnalysisResult.fake_segments;
   const seg = segments[currentTamperIdx % segments.length];
 
-  wavesurfer.setTime(seg.start_sec);
-  wavesurfer.play();
+  // 1. Smooth audio seek glide
+  const targetTime = seg.start_sec;
+  if (wavesurfer) {
+    const curTime = wavesurfer.getCurrentTime();
+    const startTime = performance.now();
+    const glideDur = 240; // 240ms smooth glide
+
+    function glideSeek(now) {
+      const elapsed = Math.min(1, (now - startTime) / glideDur);
+      const ease = 1 - Math.pow(1 - elapsed, 3);
+      const intermediate = curTime + (targetTime - curTime) * ease;
+      wavesurfer.setTime(intermediate);
+      if (elapsed < 1) {
+        requestAnimationFrame(glideSeek);
+      } else {
+        wavesurfer.setTime(targetTime);
+        wavesurfer.play();
+      }
+    }
+    requestAnimationFrame(glideSeek);
+  }
+
+  // 2. Reticle lock pulse animation on the target region element
+  const regionEls = document.querySelectorAll('.splice-region');
+  if (regionEls && regionEls[currentTamperIdx % regionEls.length]) {
+    const targetRegion = regionEls[currentTamperIdx % regionEls.length];
+    targetRegion.classList.remove('reticle-lock');
+    void targetRegion.offsetWidth;
+    targetRegion.classList.add('reticle-lock');
+  }
 
   currentTamperIdx = (currentTamperIdx + 1) % segments.length;
   const nextSeg = segments[currentTamperIdx];

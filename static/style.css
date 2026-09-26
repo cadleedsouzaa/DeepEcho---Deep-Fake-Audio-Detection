@@ -895,6 +895,67 @@ body {
 .waveform-wrap {
   position: relative;
   width: 100%;
+  overflow: hidden;
+}
+
+/* --- Animation: CRT Scanlines Texture Overlay --- */
+.crt-scanline-layer {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.22) 2px,
+    rgba(0, 0, 0, 0.22) 4px
+  );
+  pointer-events: none;
+  z-index: 8;
+  opacity: 0.55;
+}
+
+/* --- Animation: CRT Ambient Radar Beam --- */
+.crt-radar-beam {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50px;
+  background: linear-gradient(180deg, transparent, rgba(0, 255, 136, 0.04) 50%, transparent);
+  pointer-events: none;
+  z-index: 9;
+  animation: crtRadarSweep 9s linear infinite;
+}
+
+@keyframes crtRadarSweep {
+  0%   { top: -50px; opacity: 0; }
+  6%   { opacity: 1; }
+  94%  { opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+
+/* --- Animation: Forensic Ingest Laser Scan --- */
+.waveform-laser-scan {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: linear-gradient(180deg, transparent, var(--phosphor) 25%, #FFFFFF 50%, var(--phosphor) 75%, transparent);
+  box-shadow: 0 0 14px var(--phosphor), 0 0 28px var(--phosphor), -8px 0 20px rgba(0,255,136,0.35);
+  pointer-events: none;
+  z-index: 20;
+  opacity: 0;
+}
+
+.waveform-laser-scan.scanning {
+  animation: laserScanAnim 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes laserScanAnim {
+  0%   { left: 0%; opacity: 0; }
+  10%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { left: 100%; opacity: 0; }
 }
 
 .waveform-inner {
@@ -1301,9 +1362,53 @@ body {
 }
 .verdict-subtext.visible { display: block; }
 
+/* Sonar Ping for Authentic */
+@keyframes sonarPingAuthentic {
+  0%   { box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.7), inset 0 0 0 0 rgba(0, 255, 136, 0.3); }
+  50%  { box-shadow: 0 0 0 16px rgba(0, 255, 136, 0.12), inset 0 0 20px rgba(0, 255, 136, 0.12); }
+  100% { box-shadow: 0 0 0 28px rgba(0, 255, 136, 0), inset 0 0 0 0 rgba(0, 255, 136, 0); }
+}
+
+/* Alert Strobe for Synthetic */
+@keyframes alertStrobeSynthetic {
+  0%   { border-color: var(--heat-red); box-shadow: 0 0 25px rgba(255,45,85,0.7), inset 0 0 20px rgba(255,45,85,0.3); }
+  18%  { border-color: #FFFFFF; box-shadow: 0 0 35px rgba(255,255,255,0.8), inset 0 0 30px rgba(255,45,85,0.45); }
+  36%  { border-color: var(--heat-red); box-shadow: 0 0 20px rgba(255,45,85,0.5); }
+  54%  { border-color: #FFFFFF; box-shadow: 0 0 30px rgba(255,45,85,0.7); }
+  72%  { border-color: var(--heat-red); box-shadow: 0 0 15px rgba(255,45,85,0.4); }
+  100% { border-color: rgba(255,45,85,0.35); box-shadow: none; }
+}
+
+/* Alert Strobe for Splice */
+@keyframes alertStrobeSplice {
+  0%   { border-color: var(--amber-sig); box-shadow: 0 0 25px rgba(255,170,0,0.7), inset 0 0 20px rgba(255,170,0,0.3); }
+  25%  { border-color: #FFFFFF; box-shadow: 0 0 30px rgba(255,255,255,0.8), inset 0 0 25px rgba(255,170,0,0.4); }
+  50%  { border-color: var(--amber-sig); box-shadow: 0 0 18px rgba(255,170,0,0.5); }
+  100% { border-color: rgba(255,170,0,0.35); box-shadow: none; }
+}
+
+/* Text Glitch-In Animation */
+@keyframes textGlitchReveal {
+  0%   { opacity: 0; transform: translateY(-4px) skewX(-5deg); letter-spacing: 0.12em; filter: blur(2px); }
+  35%  { opacity: 0.85; transform: translateY(2px) skewX(3deg); filter: blur(0); }
+  65%  { opacity: 0.95; transform: translateY(-1px) skewX(-1.5deg); }
+  100% { opacity: 1; transform: translateY(0) skewX(0); letter-spacing: 0.04em; }
+}
+
+.verdict-state-text.reveal-anim {
+  animation: textGlitchReveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Rolling Telemetry Glow */
+.telemetry-spinning {
+  text-shadow: 0 0 14px currentColor !important;
+  transition: color 0.15s ease;
+}
+
 /* Verdict state classes */
 .verdict-cell.state-authentic {
   background: rgba(0,255,136,0.025);
+  animation: sonarPingAuthentic 1.25s ease-out;
 }
 .verdict-cell.state-authentic .verdict-state-text {
   color: var(--phosphor);
@@ -1317,6 +1422,7 @@ body {
 
 .verdict-cell.state-synthetic {
   background: rgba(255,45,85,0.025);
+  animation: alertStrobeSynthetic 0.85s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .verdict-cell.state-synthetic .verdict-state-text {
   color: var(--heat-red);
@@ -1330,6 +1436,7 @@ body {
 
 .verdict-cell.state-splice {
   background: rgba(255,170,0,0.025);
+  animation: alertStrobeSplice 0.85s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .verdict-cell.state-splice .verdict-state-text {
   color: var(--amber-sig);
@@ -2293,6 +2400,25 @@ body {
   transition: stroke 0.4s ease, filter 0.4s ease;
 }
 
+/* --- Animation: Audio Playback Dynamic Respiration --- */
+.lung-viz-container.playback-active .lung-svg {
+  animation: lungPlaybackBreathe 3.4s ease-in-out infinite;
+  transform-origin: center bottom;
+}
+@keyframes lungPlaybackBreathe {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.03) translateY(-1px); }
+  100% { transform: scale(1); }
+}
+
+.lung-viz-container.playback-active #lung-fill-meniscus {
+  animation: meniscusDynamicWobble 1.8s ease-in-out infinite alternate;
+}
+@keyframes meniscusDynamicWobble {
+  0%   { filter: drop-shadow(0 0 3px currentColor); }
+  100% { filter: drop-shadow(0 0 10px currentColor); }
+}
+
 .lung-viz-container.state-natural .lung-airways {
   animation: lung-subtle-breathe 4s ease-in-out infinite;
 }
@@ -2518,6 +2644,25 @@ body {
   pointer-events: none;
   white-space: nowrap;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+/* --- Animation: Reticle Lock on Jump to Tamper --- */
+.splice-region.reticle-lock {
+  animation: reticlePulse 1.2s ease-out;
+}
+@keyframes reticlePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 45, 85, 0.9), inset 0 0 20px rgba(255, 45, 85, 0.8);
+    border-color: #FFFFFF;
+  }
+  35% {
+    box-shadow: 0 0 0 16px rgba(255, 45, 85, 0.3), inset 0 0 30px rgba(255, 45, 85, 0.6);
+    border-color: var(--heat-red);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 45, 85, 0), inset 0 0 12px rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.75);
+  }
 }
 
 /* Certificate Screen State: hidden by default on web view */

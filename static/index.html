@@ -8,7 +8,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.min.js"></script>
   <script src="https://unpkg.com/wavesurfer.js@7/dist/plugins/regions.min.js"></script>
-  <link rel="stylesheet" href="/static/style.css?v=2.3">
+  <link rel="stylesheet" href="/static/style.css?v=2.5">
   <style>
     /* Critical fallback styles for respiratory module to ensure correct sizing and badge typography */
     .aero-module-header { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important; }
@@ -235,6 +235,11 @@
           </div>
           <div class="waveform-wrap">
             <div class="waveform-inner" id="waveform-container"></div>
+            <!-- CRT Scanline & Radar Sweep Overlay -->
+            <div class="crt-scanline-layer" aria-hidden="true"></div>
+            <div class="crt-radar-beam" aria-hidden="true"></div>
+            <!-- Forensic Ingest Laser Sweep Line -->
+            <div id="waveform-laser-scan" class="waveform-laser-scan" aria-hidden="true"></div>
             <!-- Splice Tamper Regions Overlay -->
             <div id="splice-regions-container" class="splice-regions-container" aria-label="Detected synthetic intervals"></div>
             <!-- Interactive Trimmer Overlay over waveform -->
@@ -851,6 +856,6 @@
   </div>
 </section>
 
-<script src="/static/app.js?v=2.4"></script>
+<script src="/static/app.js?v=2.5"></script>
 </body>
 </html>
